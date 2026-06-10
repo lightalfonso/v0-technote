@@ -10,8 +10,8 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
+  title: 'TechNotes – Gestión para Técnicos en Computación',
+  description: 'App de notas, agenda, licencias de software y control de equipos para técnicos en computación.',
   generator: 'v0.app',
   icons: {
     icon: [
