@@ -53,7 +53,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
     >
       {/* Logo */}
       <div className={cn('flex items-center gap-3 px-4 py-4 border-b border-border', collapsed && 'justify-center px-0')}>
-        <div className="bg-primary rounded-lg p-1.5 flex-shrink-0">
+        <div className="bg-primary rounded-lg p-1.5 flex-shrink-0 shadow-lg shadow-primary/30">
           <MonitorCog className="h-5 w-5 text-primary-foreground" />
         </div>
         {!collapsed && (
@@ -62,7 +62,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-3 px-2 flex flex-col gap-1 overflow-y-auto">
+      <nav className="flex-1 py-3 px-2 flex flex-col gap-0.5 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon
           const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href)
@@ -72,15 +72,18 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
               href={item.href}
               title={collapsed ? item.label : undefined}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
                 isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  ? 'bg-primary/15 text-primary border border-primary/20 shadow-sm shadow-primary/10'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                 collapsed && 'justify-center px-0'
               )}
             >
-              <Icon className="h-4 w-4 flex-shrink-0" />
+              <Icon className={cn('h-4 w-4 flex-shrink-0', isActive && 'text-primary')} />
               {!collapsed && <span>{item.label}</span>}
+              {!collapsed && isActive && (
+                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+              )}
             </Link>
           )
         })}
@@ -89,7 +92,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
       {/* User + collapse */}
       <div className="border-t border-border p-2 flex flex-col gap-1">
         {!collapsed && (
-          <div className="px-3 py-2">
+          <div className="px-3 py-2 rounded-lg bg-secondary/50 mb-1">
             <p className="text-sm font-medium text-foreground truncate">{userName}</p>
             <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
           </div>
@@ -101,7 +104,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
             onClick={handleSignOut}
             title="Cerrar sesión"
             className={cn(
-              'text-muted-foreground hover:text-destructive flex items-center gap-2',
+              'text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center gap-2',
               collapsed ? 'w-10 h-10 p-0 justify-center' : 'flex-1 justify-start px-3'
             )}
           >
@@ -113,7 +116,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
             size="sm"
             onClick={() => setCollapsed(!collapsed)}
             title={collapsed ? 'Expandir' : 'Colapsar'}
-            className="w-10 h-10 p-0 justify-center text-muted-foreground"
+            className="w-10 h-10 p-0 justify-center text-muted-foreground hover:text-foreground"
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </Button>

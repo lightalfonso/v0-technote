@@ -172,7 +172,7 @@ export function NotesClient({ initialNotes, categories }: NotesClientProps) {
         </div>
         <Select value={filterCat} onValueChange={setFilterCat}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Categoría" />
+            <SelectValue>{filterCat === 'all' ? 'Todas las categorías' : filterCat === 'none' ? 'Sin categoría' : (categories.find(c => c.id.toString() === filterCat)?.name ?? 'Categoría')}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas las categorías</SelectItem>
@@ -184,7 +184,7 @@ export function NotesClient({ initialNotes, categories }: NotesClientProps) {
         </Select>
         <Select value={filterPriority} onValueChange={setFilterPriority}>
           <SelectTrigger className="w-36">
-            <SelectValue placeholder="Prioridad" />
+            <SelectValue>{filterPriority === 'all' ? 'Todas' : (PRIORITIES.find(p => p.value === filterPriority)?.label ?? 'Prioridad')}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas</SelectItem>
