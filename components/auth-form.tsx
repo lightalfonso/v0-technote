@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MonitorCog, Lock, Mail, User, ArrowRight, Terminal } from 'lucide-react'
+import { getEmailByName } from '@/app/actions/auth'
 
 export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   const router = useRouter()
@@ -24,9 +25,20 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
     setError(null)
     setLoading(true)
 
+    let loginEmail = email
+    if (!isSignUp && !email.includes('@')) {
+      const resolvedEmail = await getEmailByName(email)
+      if (!resolvedEmail) {
+        setError('Usuario no encontrado')
+        setLoading(false)
+        return
+      }
+      loginEmail = resolvedEmail
+    }
+
     const { error } = isSignUp
-      ? await authClient.signUp.email({ email, password, name })
-      : await authClient.signIn.email({ email, password })
+      ? await authClient.signUp.email({ email: loginEmail, password, name })
+      : await authClient.signIn.email({ email: loginEmail, password })
 
     setLoading(false)
 
@@ -104,16 +116,18 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
             )}
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="email" className="text-foreground text-sm">Correo electrónico</Label>
+              <Label htmlFor="email" className="text-foreground text-sm">
+                {isSignUp ? 'Correo electrónico' : 'Usuario o correo electrónico'}
+              </Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="email"
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  placeholder="tu@correo.com"
+                  placeholder={isSignUp ? "tu@correo.com" : "Usuario o correo electrónico"}
                   autoComplete="email"
                   className="pl-9 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
                 />

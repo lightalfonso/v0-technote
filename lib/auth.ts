@@ -30,7 +30,7 @@ export const auth = betterAuth({
   advanced: {
     disableCSRFCheck: process.env.NODE_ENV === 'development',
     defaultCookieAttributes:
-      process.env.NODE_ENV === 'development'
+      process.env.NODE_ENV === 'development' && process.env.V0_RUNTIME_URL
         ? { sameSite: 'none' as const, secure: true }
         : undefined,
   },
