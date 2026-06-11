@@ -16,6 +16,7 @@ export const auth = betterAuth({
   },
   trustedOrigins: [
     'http://localhost:3000',
+    'http://localhost:3001',
     ...(process.env.V0_RUNTIME_URL ? [process.env.V0_RUNTIME_URL] : []),
     ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : []),
     ...(process.env.VERCEL_PROJECT_PRODUCTION_URL
@@ -26,14 +27,11 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 7,
     updateAge: 60 * 60 * 24,
   },
-  ...(process.env.NODE_ENV === 'development'
-    ? {
-        advanced: {
-          defaultCookieAttributes: {
-            sameSite: 'none' as const,
-            secure: true,
-          },
-        },
-      }
-    : {}),
+  advanced: {
+    disableCSRFCheck: process.env.NODE_ENV === 'development',
+    defaultCookieAttributes:
+      process.env.NODE_ENV === 'development'
+        ? { sameSite: 'none' as const, secure: true }
+        : undefined,
+  },
 })
