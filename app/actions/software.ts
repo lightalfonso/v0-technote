@@ -30,6 +30,16 @@ export async function createSoftwareLicense(data: {
   downloadUrl?: string
   notes?: string
   categoryId?: number | null
+  purchasePlace?: string
+  purchaseUser?: string
+  purchasePassword?: string
+  clientName?: string
+  clientPhone?: string
+  pricePaid?: number
+  installationNotes?: string
+  warrantyDuration?: string
+  warrantyCoverage?: string
+  activationType?: string
 }) {
   const userId = await getUserId()
   await db.insert(softwareLicenses).values({
@@ -45,6 +55,16 @@ export async function createSoftwareLicense(data: {
     downloadUrl: data.downloadUrl ?? null,
     notes: data.notes ?? null,
     categoryId: data.categoryId ?? null,
+    purchasePlace: data.purchasePlace ?? null,
+    purchaseUser: data.purchaseUser ?? null,
+    purchasePassword: data.purchasePassword ?? null,
+    clientName: data.clientName ?? null,
+    clientPhone: data.clientPhone ?? null,
+    pricePaid: data.pricePaid ?? null,
+    installationNotes: data.installationNotes ?? null,
+    warrantyDuration: data.warrantyDuration ?? null,
+    warrantyCoverage: data.warrantyCoverage ?? null,
+    activationType: data.activationType ?? null,
   })
   revalidatePath('/dashboard/software')
 }
@@ -63,6 +83,16 @@ export async function updateSoftwareLicense(
     downloadUrl: string
     notes: string
     categoryId: number | null
+    purchasePlace: string
+    purchaseUser: string
+    purchasePassword: string
+    clientName: string
+    clientPhone: string
+    pricePaid: number
+    installationNotes: string
+    warrantyDuration: string
+    warrantyCoverage: string
+    activationType: string
   }>
 ) {
   const userId = await getUserId()
