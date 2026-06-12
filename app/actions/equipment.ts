@@ -36,7 +36,7 @@ export async function createEquipment(data: {
   clientId?: number | null
 }) {
   const userId = await getUserId()
-  await db.insert(equipment).values({
+  const result = await db.insert(equipment).values({
     userId,
     name: data.name,
     brand: data.brand ?? null,
