@@ -165,15 +165,21 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
           </form>
 
           <div className="mt-5 pt-5 border-t border-border text-center">
-            <p className="text-sm text-muted-foreground">
-              {isSignUp ? '¿Ya tienes cuenta? ' : '¿No tienes cuenta? '}
-              <Link
-                href={isSignUp ? '/sign-in' : '/sign-up'}
-                className="text-primary font-medium hover:text-primary/80 transition-colors"
-              >
-                {isSignUp ? 'Inicia sesión' : 'Regístrate gratis'}
-              </Link>
-            </p>
+            {isSignUp ? (
+              <p className="text-sm text-muted-foreground">
+                ¿Ya tienes cuenta?{' '}
+                <Link
+                  href="/sign-in"
+                  className="text-primary font-medium hover:text-primary/80 transition-colors"
+                >
+                  Inicia sesión
+                </Link>
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground italic text-muted-foreground/60">
+                El registro de nuevas cuentas está deshabilitado
+              </p>
+            )}
           </div>
         </div>
 

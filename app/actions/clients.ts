@@ -18,14 +18,18 @@ export async function getClients() {
   return db.select().from(clients).where(eq(clients.userId, userId)).orderBy(desc(clients.createdAt))
 }
 
-export async function createClient(data: { name: string; phone?: string }) {
+export async function createClient(data: { name: string; phone?: string; email?: string; address?: string; rut?: string }) {
   const userId = await getUserId()
   const result = await db.insert(clients).values({
     userId,
     name: data.name,
     phone: data.phone ?? null,
+    email: data.email ?? null,
+    address: data.address ?? null,
+    rut: data.rut ?? null,
   }).returning({ id: clients.id })
   
+  revalidatePath('/dashboard/clientes')
   revalidatePath('/dashboard/software')
   revalidatePath('/dashboard/equipos')
   return result[0];
@@ -33,7 +37,7 @@ export async function createClient(data: { name: string; phone?: string }) {
 
 export async function updateClient(
   id: number,
-  data: Partial<{ name: string; phone: string }>
+  data: Partial<{ name: string; phone: string; email: string; address: string; rut: string }>
 ) {
   const userId = await getUserId()
   await db
@@ -41,6 +45,7 @@ export async function updateClient(
     .set({ ...data, updatedAt: new Date() })
     .where(and(eq(clients.id, id), eq(clients.userId, userId)))
   
+  revalidatePath('/dashboard/clientes')
   revalidatePath('/dashboard/software')
   revalidatePath('/dashboard/equipos')
 }
@@ -49,6 +54,7 @@ export async function deleteClient(id: number) {
   const userId = await getUserId()
   await db.delete(clients).where(and(eq(clients.id, id), eq(clients.userId, userId)))
   
+  revalidatePath('/dashboard/clientes')
   revalidatePath('/dashboard/software')
   revalidatePath('/dashboard/equipos')
 }

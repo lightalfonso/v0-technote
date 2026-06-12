@@ -37,7 +37,10 @@ export async function getJobs() {
   return allJobs.map((job) => {
     const clientObj = clientsList.find(c => c.id === job.clientId)
     
-    // Find equipment linked to this job
+    // Find equipment linked directly
+    const mainEquipment = allEquipList.find(e => e.id === job.equipmentId)
+    
+    // Find equipment linked to this job (fallback many-to-many)
     const linkedEquipIds = jobEquipList.filter(je => je.jobId === job.id).map(je => je.equipmentId)
     const linkedEquipments = allEquipList.filter(e => linkedEquipIds.includes(e.id))
     
@@ -47,7 +50,8 @@ export async function getJobs() {
     return {
       ...job,
       client: clientObj ?? null,
-      equipments: linkedEquipments,
+      equipment: mainEquipment ?? (linkedEquipments[0] ?? null),
+      equipments: mainEquipment ? [mainEquipment] : linkedEquipments,
       licenses: linkedLicenses
     }
   })
@@ -55,6 +59,7 @@ export async function getJobs() {
 
 export async function createJob(data: {
   clientId: number
+  equipmentId?: number | null
   jobDate: string
   title: string
   description?: string
@@ -69,11 +74,13 @@ export async function createJob(data: {
   licenseIds?: number[]
 }) {
   const userId = await getUserId()
+  const finalEquipId = data.equipmentId ?? (data.equipmentIds && data.equipmentIds[0]) ?? null
   
   // 1. Insert the job
   const inserted = await db.insert(jobs).values({
     userId,
     clientId: data.clientId,
+    equipmentId: finalEquipId,
     jobDate: data.jobDate,
     title: data.title,
     description: data.description ?? null,
@@ -88,8 +95,13 @@ export async function createJob(data: {
   
   const jobId = inserted[0].id
   
-  // 2. Insert job_equipment relations
-  if (data.equipmentIds.length > 0) {
+  // 2. Insert job_equipment relations (for backward compatibility)
+  if (finalEquipId) {
+    await db.insert(jobEquipment).values({
+      jobId,
+      equipmentId: finalEquipId
+    })
+  } else if (data.equipmentIds && data.equipmentIds.length > 0) {
     const valuesToInsert = data.equipmentIds.map(equipId => ({
       jobId,
       equipmentId: equipId
@@ -97,11 +109,15 @@ export async function createJob(data: {
     await db.insert(jobEquipment).values(valuesToInsert)
   }
   
-  // 3. Update software_licenses to link them to this jobId
+  // 3. Update software_licenses to link them to this jobId AND equipmentId
   if (data.licenseIds && data.licenseIds.length > 0) {
     for (const licId of data.licenseIds) {
       await db.update(softwareLicenses)
-        .set({ jobId, updatedAt: new Date() })
+        .set({ 
+          jobId, 
+          equipmentId: finalEquipId, 
+          updatedAt: new Date() 
+        })
         .where(eq(softwareLicenses.id, licId))
     }
   }
@@ -115,6 +131,7 @@ export async function updateJob(
   id: number,
   data: {
     clientId: number
+    equipmentId?: number | null
     jobDate: string
     title: string
     description?: string
@@ -130,11 +147,13 @@ export async function updateJob(
   }
 ) {
   const userId = await getUserId()
+  const finalEquipId = data.equipmentId ?? (data.equipmentIds && data.equipmentIds[0]) ?? null
   
   // 1. Update job fields
   await db.update(jobs)
     .set({
       clientId: data.clientId,
+      equipmentId: finalEquipId,
       jobDate: data.jobDate,
       title: data.title,
       description: data.description ?? null,
@@ -151,7 +170,12 @@ export async function updateJob(
   
   // 2. Update job_equipment relations (delete old, insert new)
   await db.delete(jobEquipment).where(eq(jobEquipment.jobId, id))
-  if (data.equipmentIds.length > 0) {
+  if (finalEquipId) {
+    await db.insert(jobEquipment).values({
+      jobId: id,
+      equipmentId: finalEquipId
+    })
+  } else if (data.equipmentIds.length > 0) {
     const valuesToInsert = data.equipmentIds.map(equipId => ({
       jobId: id,
       equipmentId: equipId
@@ -159,7 +183,7 @@ export async function updateJob(
     await db.insert(jobEquipment).values(valuesToInsert)
   }
   
-  // 3. Update software_licenses (remove old links to this job, set new ones)
+  // 3. Update software_licenses (remove old links to this job, set new ones with jobId AND equipmentId)
   await db.update(softwareLicenses)
     .set({ jobId: null, updatedAt: new Date() })
     .where(eq(softwareLicenses.jobId, id))
@@ -167,7 +191,11 @@ export async function updateJob(
   if (data.licenseIds && data.licenseIds.length > 0) {
     for (const licId of data.licenseIds) {
       await db.update(softwareLicenses)
-        .set({ jobId: id, updatedAt: new Date() })
+        .set({ 
+          jobId: id, 
+          equipmentId: finalEquipId, 
+          updatedAt: new Date() 
+        })
         .where(eq(softwareLicenses.id, licId))
     }
   }

@@ -231,13 +231,19 @@ function LicenseForm({
   )
   const [newClientName, setNewClientName] = useState('')
   const [newClientPhone, setNewClientPhone] = useState('')
+  const [newClientEmail, setNewClientEmail] = useState('')
+  const [newClientAddress, setNewClientAddress] = useState('')
+  const [newClientRut, setNewClientRut] = useState('')
   
   const [equipmentSelection, setEquipmentSelection] = useState<string>(
     license?.equipmentId?.toString() ?? 'none'
   )
-  const [newEquipmentName, setNewEquipmentName] = useState('')
+  const [newEquipmentName, setNewEquipmentName] = useState('Notebook')
+  const [customEquipmentType, setCustomEquipmentType] = useState('')
   const [newEquipmentBrand, setNewEquipmentBrand] = useState('')
   const [newEquipmentModel, setNewEquipmentModel] = useState('')
+  const [newEquipmentSerial, setNewEquipmentSerial] = useState('')
+  const [newEquipmentNotes, setNewEquipmentNotes] = useState('')
   const [createEquipmentForNewClient, setCreateEquipmentForNewClient] = useState(false)
   const [newEquipmentPricePaid, setNewEquipmentPricePaid] = useState('')
   const [equipPricePaid, setEquipPricePaid] = useState('')
@@ -314,6 +320,9 @@ function LicenseForm({
         const createdClient = await createClient({
           name: newClientName.trim(),
           phone: newClientPhone.trim() || undefined,
+          email: newClientEmail.trim() || undefined,
+          address: newClientAddress.trim() || undefined,
+          rut: newClientRut.trim() || undefined,
         })
         if (createdClient?.id) {
           finalClientId = createdClient.id
@@ -331,12 +340,15 @@ function LicenseForm({
       }
 
       // 2. Equipment flow
+      const eqName = newEquipmentName === 'Otro' ? customEquipmentType.trim() : newEquipmentName
       if (clientSelection === 'new') {
-        if (createEquipmentForNewClient && newEquipmentName.trim()) {
+        if (createEquipmentForNewClient && eqName.trim()) {
           const createdEquip = await createEquipment({
-            name: newEquipmentName.trim(),
+            name: eqName.trim(),
             brand: newEquipmentBrand.trim() || undefined,
             model: newEquipmentModel.trim() || undefined,
+            serialNumber: newEquipmentSerial.trim() || undefined,
+            notes: newEquipmentNotes.trim() || undefined,
             clientId: finalClientId,
             ownerName: finalClientName || undefined,
             ownerType: 'client',
@@ -348,11 +360,13 @@ function LicenseForm({
         }
       } else if (clientSelection !== 'none') {
         if (equipmentSelection === 'new') {
-          if (!newEquipmentName.trim()) return
+          if (!eqName.trim()) return
           const createdEquip = await createEquipment({
-            name: newEquipmentName.trim(),
+            name: eqName.trim(),
             brand: newEquipmentBrand.trim() || undefined,
             model: newEquipmentModel.trim() || undefined,
+            serialNumber: newEquipmentSerial.trim() || undefined,
+            notes: newEquipmentNotes.trim() || undefined,
             clientId: finalClientId,
             ownerName: finalClientName || undefined,
             ownerType: 'client',
@@ -546,22 +560,49 @@ function LicenseForm({
         </div>
 
         {clientSelection === 'new' && (
-          <>
-            <div className="flex flex-col gap-2">
-              <Label>Nombre del cliente nuevo</Label>
+          <div className="col-span-2 grid grid-cols-2 gap-3 bg-secondary/10 p-3 rounded-lg border border-border">
+            <div className="col-span-2">
+              <h5 className="text-xs font-semibold text-foreground">Detalles del Nuevo Cliente</h5>
+            </div>
+            <div className="flex flex-col gap-2 col-span-2">
+              <Label>Nombre y Apellido</Label>
               <Input 
                 value={newClientName} 
                 onChange={(e) => setNewClientName(e.target.value)} 
-                placeholder="Nombre del cliente" 
+                placeholder="Ej: Alfonso Muñoz" 
                 required={clientSelection === 'new'}
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Teléfono del cliente nuevo</Label>
+              <Label>Teléfono</Label>
               <Input 
                 value={newClientPhone} 
                 onChange={(e) => setNewClientPhone(e.target.value)} 
                 placeholder="Ej: +56 9 1234 5678" 
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>RUT (Opcional)</Label>
+              <Input 
+                value={newClientRut} 
+                onChange={(e) => setNewClientRut(e.target.value)} 
+                placeholder="Ej: 12.345.678-9" 
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>Correo (Opcional)</Label>
+              <Input 
+                value={newClientEmail} 
+                onChange={(e) => setNewClientEmail(e.target.value)} 
+                placeholder="correo@ejemplo.com" 
+              />
+            </div>
+            <div className="flex flex-col gap-2 col-span-2">
+              <Label>Dirección (Opcional)</Label>
+              <Input 
+                value={newClientAddress} 
+                onChange={(e) => setNewClientAddress(e.target.value)} 
+                placeholder="Ej: Av. Providencia 1234, Oficina 50" 
               />
             </div>
             <div className="col-span-2 flex items-center gap-2 mt-1">
@@ -577,19 +618,40 @@ function LicenseForm({
               </Label>
             </div>
             {createEquipmentForNewClient && (
-              <div className="col-span-2 grid grid-cols-2 gap-3 bg-secondary/20 p-3 rounded-lg border border-border/50">
+              <div className="col-span-2 grid grid-cols-2 gap-3 bg-secondary/20 p-3 rounded-lg border border-border mt-1">
                 <div className="col-span-2">
                   <h5 className="text-xs font-semibold text-foreground">Detalles del Nuevo Equipo</h5>
                 </div>
-                <div className="flex flex-col gap-2 col-span-2">
-                  <Label>Nombre del equipo</Label>
-                  <Input 
-                    value={newEquipmentName} 
-                    onChange={(e) => setNewEquipmentName(e.target.value)} 
-                    placeholder="Ej: HP EliteBook G3 (1)" 
-                    required={createEquipmentForNewClient}
-                  />
+                <div className="flex flex-col gap-2">
+                  <Label>Tipo de Equipo</Label>
+                  <Select value={newEquipmentName} onValueChange={setNewEquipmentName}>
+                    <SelectTrigger>
+                      <SelectValue>{newEquipmentName}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Notebook">Notebook</SelectItem>
+                      <SelectItem value="Desktop">Desktop</SelectItem>
+                      <SelectItem value="Router">Router</SelectItem>
+                      <SelectItem value="Switch">Switch</SelectItem>
+                      <SelectItem value="Otro">Otro (Nuevo)...</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                {newEquipmentName === 'Otro' ? (
+                  <div className="flex flex-col gap-2">
+                    <Label>Escribe el tipo de equipo</Label>
+                    <Input 
+                      value={customEquipmentType} 
+                      onChange={(e) => setCustomEquipmentType(e.target.value)} 
+                      placeholder="Ej: Servidor, Access Point" 
+                      required={newEquipmentName === 'Otro'}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 justify-end">
+                    <p className="text-xs text-muted-foreground italic mb-2">Se creará como tipo: {newEquipmentName}</p>
+                  </div>
+                )}
                 <div className="flex flex-col gap-2">
                   <Label>Marca (Opcional)</Label>
                   <Input 
@@ -607,6 +669,24 @@ function LicenseForm({
                   />
                 </div>
                 <div className="flex flex-col gap-2 col-span-2">
+                  <Label>Número de Serie (Opcional)</Label>
+                  <Input 
+                    value={newEquipmentSerial} 
+                    onChange={(e) => setNewEquipmentSerial(e.target.value)} 
+                    placeholder="Ej: S/N 12345" 
+                  />
+                </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <Label>Notas del Equipo (Opcional)</Label>
+                  <Textarea 
+                    value={newEquipmentNotes} 
+                    onChange={(e) => setNewEquipmentNotes(e.target.value)} 
+                    rows={2}
+                    placeholder="Notas o estado físico..." 
+                    className="resize-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-2 col-span-2">
                   <Label>Monto cobrado por este equipo (CLP)</Label>
                   <Input 
                     type="number" 
@@ -617,7 +697,7 @@ function LicenseForm({
                 </div>
               </div>
             )}
-          </>
+          </div>
         )}
 
         {clientSelection !== 'none' && clientSelection !== 'new' && (
@@ -655,19 +735,40 @@ function LicenseForm({
             </div>
 
             {equipmentSelection === 'new' && (
-              <div className="col-span-2 grid grid-cols-2 gap-3 bg-secondary/20 p-3 rounded-lg border border-border/50">
+              <div className="col-span-2 grid grid-cols-2 gap-3 bg-secondary/20 p-3 rounded-lg border border-border/50 mt-1">
                 <div className="col-span-2">
                   <h5 className="text-xs font-semibold text-foreground">Detalles del Nuevo Equipo</h5>
                 </div>
-                <div className="flex flex-col gap-2 col-span-2">
-                  <Label>Nombre del equipo</Label>
-                  <Input 
-                    value={newEquipmentName} 
-                    onChange={(e) => setNewEquipmentName(e.target.value)} 
-                    placeholder="Ej: HP EliteBook G3 (1)" 
-                    required={equipmentSelection === 'new'}
-                  />
+                <div className="flex flex-col gap-2">
+                  <Label>Tipo de Equipo</Label>
+                  <Select value={newEquipmentName} onValueChange={setNewEquipmentName}>
+                    <SelectTrigger>
+                      <SelectValue>{newEquipmentName}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Notebook">Notebook</SelectItem>
+                      <SelectItem value="Desktop">Desktop</SelectItem>
+                      <SelectItem value="Router">Router</SelectItem>
+                      <SelectItem value="Switch">Switch</SelectItem>
+                      <SelectItem value="Otro">Otro (Nuevo)...</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                {newEquipmentName === 'Otro' ? (
+                  <div className="flex flex-col gap-2">
+                    <Label>Escribe el tipo de equipo</Label>
+                    <Input 
+                      value={customEquipmentType} 
+                      onChange={(e) => setCustomEquipmentType(e.target.value)} 
+                      placeholder="Ej: Servidor, Access Point" 
+                      required={equipmentSelection === 'new' && newEquipmentName === 'Otro'}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 justify-end">
+                    <p className="text-xs text-muted-foreground italic mb-2">Se creará como tipo: {newEquipmentName}</p>
+                  </div>
+                )}
                 <div className="flex flex-col gap-2">
                   <Label>Marca (Opcional)</Label>
                   <Input 
@@ -682,6 +783,24 @@ function LicenseForm({
                     value={newEquipmentModel} 
                     onChange={(e) => setNewEquipmentModel(e.target.value)} 
                     placeholder="Ej: EliteBook G3" 
+                  />
+                </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <Label>Número de Serie (Opcional)</Label>
+                  <Input 
+                    value={newEquipmentSerial} 
+                    onChange={(e) => setNewEquipmentSerial(e.target.value)} 
+                    placeholder="Ej: S/N 12345" 
+                  />
+                </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <Label>Notas del Equipo (Opcional)</Label>
+                  <Textarea 
+                    value={newEquipmentNotes} 
+                    onChange={(e) => setNewEquipmentNotes(e.target.value)} 
+                    rows={2}
+                    placeholder="Notas o estado físico..." 
+                    className="resize-none"
                   />
                 </div>
                 <div className="flex flex-col gap-2 col-span-2">

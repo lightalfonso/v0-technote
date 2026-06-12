@@ -40,7 +40,16 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function EquipmentForm({ item, categories, onClose }: { item?: Equipment; categories: Category[]; onClose: () => void }) {
-  const [name, setName] = useState(item?.name ?? '')
+  const [eqType, setEqType] = useState(() => {
+    if (!item?.name) return 'Notebook'
+    if (['Notebook', 'Desktop', 'Router', 'Switch'].includes(item.name)) return item.name
+    return 'Otro'
+  })
+  const [customType, setCustomType] = useState(() => {
+    if (!item?.name) return ''
+    if (['Notebook', 'Desktop', 'Router', 'Switch'].includes(item.name)) return ''
+    return item.name
+  })
   const [brand, setBrand] = useState(item?.brand ?? '')
   const [model, setModel] = useState(item?.model ?? '')
   const [serialNumber, setSerialNumber] = useState(item?.serialNumber ?? '')
@@ -60,8 +69,10 @@ function EquipmentForm({ item, categories, onClose }: { item?: Equipment; catego
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     startTransition(async () => {
+      const finalName = eqType === 'Otro' ? customType.trim() : eqType
+      if (!finalName) return
       const data = {
-        name, 
+        name: finalName, 
         brand: brand || undefined, 
         model: model || undefined,
         serialNumber: serialNumber || undefined, 
@@ -90,9 +101,31 @@ function EquipmentForm({ item, categories, onClose }: { item?: Equipment; catego
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-h-[70vh] overflow-y-auto pr-1">
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-2 col-span-2">
-          <Label>Nombre del equipo</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Laptop, PC, Impresora..." />
+          <Label>Tipo de Equipo</Label>
+          <Select value={eqType} onValueChange={setEqType}>
+            <SelectTrigger>
+              <SelectValue>{eqType}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Notebook">Notebook</SelectItem>
+              <SelectItem value="Desktop">Desktop</SelectItem>
+              <SelectItem value="Router">Router</SelectItem>
+              <SelectItem value="Switch">Switch</SelectItem>
+              <SelectItem value="Otro">Otro (Nuevo)...</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+        {eqType === 'Otro' && (
+          <div className="flex flex-col gap-2 col-span-2">
+            <Label>Escribe el tipo de equipo</Label>
+            <Input 
+              value={customType} 
+              onChange={(e) => setCustomType(e.target.value)} 
+              placeholder="Ej: Servidor, Impresora" 
+              required={eqType === 'Otro'}
+            />
+          </div>
+        )}
         <div className="flex flex-col gap-2">
           <Label>Marca</Label>
           <Input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Dell, HP, Samsung..." />

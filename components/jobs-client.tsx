@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect, useMemo } from 'react'
 import { createJob, updateJob, deleteJob } from '@/app/actions/jobs'
 import { createClient } from '@/app/actions/clients'
+import { createEquipment } from '@/app/actions/equipment'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -129,7 +130,10 @@ function exportJobToTxt(job: ExtendedJob) {
   txt += `Fecha: ${formatLocalDate(job.jobDate)}\n`;
   if (job.client) {
     txt += `Cliente: ${job.client.name}\n`;
+    if (job.client.rut) txt += `RUT: ${job.client.rut}\n`;
     if (job.client.phone) txt += `Teléfono: ${job.client.phone}\n`;
+    if (job.client.email) txt += `Correo: ${job.client.email}\n`;
+    if (job.client.address) txt += `Dirección: ${job.client.address}\n`;
   }
   if (job.pricePaid) {
     txt += `Monto Cobrado: CLP ${new Intl.NumberFormat('es-CL').format(job.pricePaid)}\n`;
@@ -158,6 +162,7 @@ function exportJobToTxt(job: ExtendedJob) {
       txt += `  ${idx + 1}. ${e.name} ${e.brand || e.model ? `(${[e.brand, e.model].filter(Boolean).join(' ')})` : ''}\n`;
       if (e.serialNumber) txt += `     S/N: ${e.serialNumber}\n`;
       if (e.specs) txt += `     Specs: ${e.specs}\n`;
+      if (e.notes) txt += `     Notas: ${e.notes}\n`;
     });
   }
 
@@ -204,11 +209,20 @@ function JobForm({
   )
   const [newClientName, setNewClientName] = useState('')
   const [newClientPhone, setNewClientPhone] = useState('')
+  const [newClientEmail, setNewClientEmail] = useState('')
+  const [newClientAddress, setNewClientAddress] = useState('')
+  const [newClientRut, setNewClientRut] = useState('')
 
-  // Equipment selection (multiple checklist)
-  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<number[]>(
-    job?.equipments.map(e => e.id) ?? []
+  // Equipment selection/creation
+  const [equipmentSelection, setEquipmentSelection] = useState<string>(
+    job?.equipmentId?.toString() ?? (job?.equipments && job.equipments[0]?.id.toString()) ?? 'none'
   )
+  const [newEquipmentName, setNewEquipmentName] = useState('Notebook')
+  const [customEquipmentType, setCustomEquipmentType] = useState('')
+  const [newEquipmentBrand, setNewEquipmentBrand] = useState('')
+  const [newEquipmentModel, setNewEquipmentModel] = useState('')
+  const [newEquipmentSerial, setNewEquipmentSerial] = useState('')
+  const [newEquipmentNotes, setNewEquipmentNotes] = useState('')
 
   // Licenses selection (multiple checklist)
   const [selectedLicenseIds, setSelectedLicenseIds] = useState<number[]>(
@@ -247,19 +261,13 @@ function JobForm({
   // Reset selected equipment/licenses when client changes
   useEffect(() => {
     if (!job || clientSelection.toString() !== job.clientId?.toString()) {
-      setSelectedEquipmentIds([])
+      setEquipmentSelection('none')
       setSelectedLicenseIds([])
     } else {
-      setSelectedEquipmentIds(job.equipments.map(e => e.id))
+      setEquipmentSelection(job.equipmentId?.toString() ?? (job.equipments[0]?.id.toString() ?? 'none'))
       setSelectedLicenseIds(job.licenses.map(l => l.id))
     }
   }, [clientSelection, job])
-
-  const toggleEquipment = (id: number) => {
-    setSelectedEquipmentIds(prev => 
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    )
-  }
 
   const toggleLicense = (id: number) => {
     setSelectedLicenseIds(prev => 
@@ -271,6 +279,8 @@ function JobForm({
     e.preventDefault()
     startTransition(async () => {
       let finalClientId: number | null = null
+      let finalClientName = ''
+      let finalClientPhone = ''
 
       // 1. Handle Client creation if new
       if (clientSelection === 'new') {
@@ -278,18 +288,53 @@ function JobForm({
         const createdClient = await createClient({
           name: newClientName.trim(),
           phone: newClientPhone.trim() || undefined,
+          email: newClientEmail.trim() || undefined,
+          address: newClientAddress.trim() || undefined,
+          rut: newClientRut.trim() || undefined,
         })
         if (createdClient?.id) {
           finalClientId = createdClient.id
+          finalClientName = newClientName.trim()
+          finalClientPhone = newClientPhone.trim()
         }
       } else if (clientSelection !== 'none') {
         finalClientId = parseInt(clientSelection)
+        const selectedClient = clients.find(c => c.id === finalClientId)
+        if (selectedClient) {
+          finalClientName = selectedClient.name
+          finalClientPhone = selectedClient.phone ?? ''
+        }
       }
 
       if (!finalClientId) return // Client is required
 
+      let finalEquipmentId: number | null = null
+      
+      // 2. Handle Equipment creation if new
+      if (equipmentSelection === 'new') {
+        const eqName = newEquipmentName === 'Otro' ? customEquipmentType.trim() : newEquipmentName
+        if (eqName) {
+          const createdEquip = await createEquipment({
+            name: eqName,
+            brand: newEquipmentBrand.trim() || undefined,
+            model: newEquipmentModel.trim() || undefined,
+            serialNumber: newEquipmentSerial.trim() || undefined,
+            notes: newEquipmentNotes.trim() || undefined,
+            clientId: finalClientId,
+            ownerName: finalClientName || undefined,
+            ownerType: 'client',
+          })
+          if (createdEquip?.id) {
+            finalEquipmentId = createdEquip.id
+          }
+        }
+      } else if (equipmentSelection !== 'none') {
+        finalEquipmentId = parseInt(equipmentSelection)
+      }
+
       const data = {
         clientId: finalClientId,
+        equipmentId: finalEquipmentId,
         jobDate,
         title,
         description: description || undefined,
@@ -300,7 +345,7 @@ function JobForm({
         warrantyDuration: warrantyDuration || undefined,
         warrantyExpiry: warrantyExpiry || undefined,
         pricePaid: pricePaid ? parseInt(pricePaid) : undefined,
-        equipmentIds: selectedEquipmentIds,
+        equipmentIds: finalEquipmentId ? [finalEquipmentId] : [],
         licenseIds: selectedLicenseIds,
       }
 
@@ -341,25 +386,52 @@ function JobForm({
         </div>
 
         {clientSelection === 'new' && (
-          <>
-            <div className="flex flex-col gap-2">
-              <Label>Nombre del cliente nuevo</Label>
+          <div className="col-span-2 grid grid-cols-2 gap-3 bg-secondary/10 p-3 rounded-lg border border-border">
+            <div className="col-span-2">
+              <h5 className="text-xs font-semibold text-foreground">Detalles del Nuevo Cliente</h5>
+            </div>
+            <div className="flex flex-col gap-2 col-span-2">
+              <Label>Nombre y Apellido</Label>
               <Input 
                 value={newClientName} 
                 onChange={(e) => setNewClientName(e.target.value)} 
-                placeholder="Nombre del cliente" 
+                placeholder="Ej: Alfonso Muñoz" 
                 required={clientSelection === 'new'}
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Teléfono del cliente nuevo</Label>
+              <Label>Teléfono</Label>
               <Input 
                 value={newClientPhone} 
                 onChange={(e) => setNewClientPhone(e.target.value)} 
                 placeholder="Ej: +56 9 1234 5678" 
               />
             </div>
-          </>
+            <div className="flex flex-col gap-2">
+              <Label>RUT (Opcional)</Label>
+              <Input 
+                value={newClientRut} 
+                onChange={(e) => setNewClientRut(e.target.value)} 
+                placeholder="Ej: 12.345.678-9" 
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>Correo (Opcional)</Label>
+              <Input 
+                value={newClientEmail} 
+                onChange={(e) => setNewClientEmail(e.target.value)} 
+                placeholder="correo@ejemplo.com" 
+              />
+            </div>
+            <div className="flex flex-col gap-2 col-span-2">
+              <Label>Dirección (Opcional)</Label>
+              <Input 
+                value={newClientAddress} 
+                onChange={(e) => setNewClientAddress(e.target.value)} 
+                placeholder="Ej: Av. Providencia 1234, Oficina 50" 
+              />
+            </div>
+          </div>
         )}
 
         <div className="flex flex-col gap-2">
@@ -371,52 +443,127 @@ function JobForm({
           <Input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Ej: Trabajo de día 11/06/2026" />
         </div>
 
-        {clientSelection !== 'none' && clientSelection !== 'new' && (
-          <>
-            {/* Equipments checklist */}
-            <div className="flex flex-col gap-2 col-span-2 border border-border rounded-lg p-3 bg-secondary/10">
-              <Label className="font-semibold mb-1">Equipos en los que se trabajó</Label>
-              {clientEquipment.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No hay equipos registrados para este cliente. Agrégalos en el módulo de Equipos.</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[120px] overflow-y-auto pr-1">
-                  {clientEquipment.map((e) => (
-                    <label key={e.id} className="flex items-center gap-2 text-xs font-normal cursor-pointer hover:bg-muted p-1 rounded">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedEquipmentIds.includes(e.id)} 
-                        onChange={() => toggleEquipment(e.id)}
-                        className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
-                      />
-                      <span>{e.name} {e.brand || e.model ? `(${[e.brand, e.model].filter(Boolean).join(' ')})` : ''}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
+        {clientSelection !== 'none' && (
+          <div className="flex flex-col gap-2 col-span-2 border border-border rounded-lg p-3 bg-secondary/5">
+            <Label className="font-semibold">Seleccionar Equipo Trabajado</Label>
+            <Select value={equipmentSelection} onValueChange={setEquipmentSelection}>
+              <SelectTrigger>
+                <SelectValue>
+                  {equipmentSelection === 'none'
+                    ? 'Seleccione un equipo...'
+                    : equipmentSelection === 'new'
+                      ? '➕ Crear nuevo equipo...'
+                      : (equipment.find(e => e.id.toString() === equipmentSelection.toString())?.name ?? 'Seleccione equipo') + 
+                        (equipment.find(e => e.id.toString() === equipmentSelection.toString())?.brand 
+                          ? ` - ${equipment.find(e => e.id.toString() === equipmentSelection.toString())?.brand}` : '')}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Seleccione un equipo...</SelectItem>
+                <SelectItem value="new">➕ Crear nuevo equipo...</SelectItem>
+                {clientEquipment.map((e) => (
+                  <SelectItem key={e.id} value={e.id.toString()}>
+                    {e.name} {e.brand || e.model ? `(${[e.brand, e.model].filter(Boolean).join(' ')})` : ''} {e.serialNumber ? `[S/N: ${e.serialNumber}]` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-            {/* Software licenses checklist */}
-            <div className="flex flex-col gap-2 col-span-2 border border-border rounded-lg p-3 bg-secondary/10">
-              <Label className="font-semibold mb-1">Licencias de software instaladas</Label>
-              {availableLicenses.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No hay licencias sin vincular registradas para este cliente. Agrégalas en Software.</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[120px] overflow-y-auto pr-1">
-                  {availableLicenses.map((l) => (
-                    <label key={l.id} className="flex items-center gap-2 text-xs font-normal cursor-pointer hover:bg-muted p-1 rounded">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedLicenseIds.includes(l.id)} 
-                        onChange={() => toggleLicense(l.id)}
-                        className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
-                      />
-                      <span>{l.softwareName} {l.version ? `(${l.version})` : ''}</span>
-                    </label>
-                  ))}
+            {equipmentSelection === 'new' && (
+              <div className="grid grid-cols-2 gap-3 bg-secondary/10 p-3 rounded-lg border border-border mt-2">
+                <div className="col-span-2">
+                  <h5 className="text-xs font-semibold text-foreground">Detalles del Nuevo Equipo</h5>
                 </div>
-              )}
-            </div>
-          </>
+                <div className="flex flex-col gap-2">
+                  <Label>Tipo de Equipo</Label>
+                  <Select value={newEquipmentName} onValueChange={setNewEquipmentName}>
+                    <SelectTrigger>
+                      <SelectValue>{newEquipmentName}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Notebook">Notebook</SelectItem>
+                      <SelectItem value="Desktop">Desktop</SelectItem>
+                      <SelectItem value="Router">Router</SelectItem>
+                      <SelectItem value="Switch">Switch</SelectItem>
+                      <SelectItem value="Otro">Otro (Nuevo)...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newEquipmentName === 'Otro' ? (
+                  <div className="flex flex-col gap-2">
+                    <Label>Escribe el tipo de equipo</Label>
+                    <Input 
+                      value={customEquipmentType} 
+                      onChange={(e) => setCustomEquipmentType(e.target.value)} 
+                      placeholder="Ej: Servidor, Access Point" 
+                      required={newEquipmentName === 'Otro'}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 justify-end">
+                    <p className="text-xs text-muted-foreground italic mb-2">Se creará como tipo: {newEquipmentName}</p>
+                  </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  <Label>Marca (Opcional)</Label>
+                  <Input 
+                    value={newEquipmentBrand} 
+                    onChange={(e) => setNewEquipmentBrand(e.target.value)} 
+                    placeholder="Ej: MikroTik, HP" 
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Modelo (Opcional)</Label>
+                  <Input 
+                    value={newEquipmentModel} 
+                    onChange={(e) => setNewEquipmentModel(e.target.value)} 
+                    placeholder="Ej: RB4011, ProBook 450" 
+                  />
+                </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <Label>Número de Serie (Opcional)</Label>
+                  <Input 
+                    value={newEquipmentSerial} 
+                    onChange={(e) => setNewEquipmentSerial(e.target.value)} 
+                    placeholder="Ej: S/N 123456" 
+                  />
+                </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <Label>Notas del Equipo (Opcional)</Label>
+                  <Textarea 
+                    value={newEquipmentNotes} 
+                    onChange={(e) => setNewEquipmentNotes(e.target.value)} 
+                    rows={2}
+                    placeholder="Notas o estado físico del equipo..." 
+                    className="resize-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {clientSelection !== 'none' && clientSelection !== 'new' && (
+          <div className="flex flex-col gap-2 col-span-2 border border-border rounded-lg p-3 bg-secondary/10">
+            <Label className="font-semibold mb-1">Licencias de software instaladas (Opcional)</Label>
+            {availableLicenses.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">No hay licencias sin vincular registradas para este cliente. Agrégalas en Software.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[120px] overflow-y-auto pr-1">
+                {availableLicenses.map((l) => (
+                  <label key={l.id} className="flex items-center gap-2 text-xs font-normal cursor-pointer hover:bg-muted p-1 rounded">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedLicenseIds.includes(l.id)} 
+                      onChange={() => toggleLicense(l.id)}
+                      className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                    />
+                    <span>{l.softwareName} {l.version ? `(${l.version})` : ''}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         <div className="flex flex-col gap-2 col-span-2">
@@ -651,7 +798,7 @@ export function JobsClient({
                       <span className="text-xs text-muted-foreground">({formatLocalDate(job.jobDate)})</span>
                       {job.client && (
                         <Badge variant="outline" className="text-xs flex items-center gap-1">
-                          <UserPlus className="h-3 w-3" /> {job.client.name}
+                          <UserPlus className="h-3 w-3" /> {job.client.name} {job.client.rut ? `(RUT: ${job.client.rut})` : ''}
                         </Badge>
                       )}
                       {job.pricePaid && (
@@ -672,14 +819,22 @@ export function JobsClient({
                       {job.equipments.length > 0 && (
                         <div className="bg-secondary/20 p-2.5 rounded-lg border border-border/40 text-xs">
                           <p className="font-semibold text-primary mb-1 flex items-center gap-1.5">
-                            <Laptop className="h-3.5 w-3.5" /> Equipos Trabajados
+                            <Laptop className="h-3.5 w-3.5" /> Equipo Trabajado
                           </p>
-                          <ul className="space-y-1 text-muted-foreground">
+                          <ul className="space-y-2 text-muted-foreground">
                             {job.equipments.map(e => (
-                              <li key={e.id} className="flex items-center gap-1.5">
-                                <span className="w-1 h-1 rounded-full bg-muted-foreground" />
-                                <span className="font-medium text-foreground">{e.name}</span>
-                                {e.brand || e.model ? `(${[e.brand, e.model].filter(Boolean).join(' ')})` : ''}
+                              <li key={e.id} className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-1 h-1 rounded-full bg-muted-foreground" />
+                                  <span className="font-medium text-foreground">{e.name}</span>
+                                  {e.brand || e.model ? `(${[e.brand, e.model].filter(Boolean).join(' ')})` : ''}
+                                </div>
+                                {e.serialNumber && (
+                                  <span className="text-[10px] text-muted-foreground ml-2.5 font-mono">S/N: {e.serialNumber}</span>
+                                )}
+                                {e.notes && (
+                                  <span className="text-[10px] text-muted-foreground ml-2.5 italic">Nota: {e.notes}</span>
+                                )}
                               </li>
                             ))}
                           </ul>
@@ -707,6 +862,19 @@ export function JobsClient({
 
                     {/* Details and notes */}
                     <div className="mt-3 pt-3 border-t border-border grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                      {job.client && (job.client.phone || job.client.email || job.client.address) && (
+                        <div className="bg-secondary/30 p-2.5 rounded-lg border border-border/50">
+                          <p className="font-semibold text-muted-foreground mb-1 flex items-center gap-1.5">
+                            <Phone className="h-3.5 w-3.5" /> Contacto Cliente
+                          </p>
+                          <div className="space-y-1 text-muted-foreground">
+                            {job.client.phone && <p><span className="font-medium">Tel:</span> {job.client.phone}</p>}
+                            {job.client.email && <p className="truncate" title={job.client.email}><span className="font-medium">Email:</span> {job.client.email}</p>}
+                            {job.client.address && <p className="line-clamp-2" title={job.client.address}><span className="font-medium">Dir:</span> {job.client.address}</p>}
+                          </div>
+                        </div>
+                      )}
+
                       {job.workNotes && (
                         <div className="bg-secondary/30 p-2.5 rounded-lg border border-border/50">
                           <p className="font-semibold text-muted-foreground mb-1 flex items-center gap-1.5">
@@ -716,28 +884,22 @@ export function JobsClient({
                         </div>
                       )}
 
-                      {(job.problemsFound || job.problemsSolved) && (
-                        <div className="bg-secondary/30 p-2.5 rounded-lg border border-border/50 col-span-1">
+                      {(job.problemsFound || job.problemsSolved || job.recommendations) && (
+                        <div className="bg-secondary/30 p-2.5 rounded-lg border border-border/50 col-span-1 lg:col-span-1">
                           <p className="font-semibold text-muted-foreground mb-1 flex items-center gap-1.5">
-                            <AlertCircle className="h-3.5 w-3.5" /> Diagnóstico
+                            <AlertCircle className="h-3.5 w-3.5" /> Diagnóstico & Rec.
                           </p>
-                          <div className="space-y-1.5">
+                          <div className="space-y-1 text-muted-foreground">
                             {job.problemsFound && (
                               <p><span className="text-red-500 font-medium">Falla:</span> {job.problemsFound}</p>
                             )}
                             {job.problemsSolved && (
                               <p><span className="text-emerald-500 font-medium">Solución:</span> {job.problemsSolved}</p>
                             )}
+                            {job.recommendations && (
+                              <p><span className="text-primary font-medium">Rec:</span> {job.recommendations}</p>
+                            )}
                           </div>
-                        </div>
-                      )}
-
-                      {job.recommendations && (
-                        <div className="bg-secondary/30 p-2.5 rounded-lg border border-border/50">
-                          <p className="font-semibold text-muted-foreground mb-1 flex items-center gap-1.5">
-                            <ShieldCheck className="h-3.5 w-3.5" /> Recomendaciones
-                          </p>
-                          <p className="text-muted-foreground whitespace-pre-wrap">{job.recommendations}</p>
                         </div>
                       )}
                     </div>

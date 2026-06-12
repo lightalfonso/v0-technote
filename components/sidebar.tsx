@@ -16,6 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Wrench,
+  Users,
+  ShieldCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -23,6 +25,7 @@ import { Button } from '@/components/ui/button'
 const navItems = [
   { href: '/dashboard', label: 'Inicio', icon: LayoutDashboard, exact: true },
   { href: '/dashboard/trabajos', label: 'Trabajos', icon: Wrench },
+  { href: '/dashboard/clientes', label: 'Clientes', icon: Users },
   { href: '/dashboard/notas', label: 'Notas', icon: StickyNote },
   { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarDays },
   { href: '/dashboard/software', label: 'Software & Licencias', icon: Laptop },
@@ -39,6 +42,14 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+
+  const isAdmin = userEmail?.toLowerCase() === 'alfonso@latenciacero.cl'
+  const items = isAdmin
+    ? [
+        ...navItems,
+        { href: '/dashboard/usuarios', label: 'Usuarios', icon: ShieldCheck },
+      ]
+    : navItems
 
   const handleSignOut = async () => {
     await authClient.signOut()
@@ -65,7 +76,7 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 py-3 px-2 flex flex-col gap-0.5 overflow-y-auto">
-        {navItems.map((item) => {
+        {items.map((item) => {
           const Icon = item.icon
           const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href)
           return (

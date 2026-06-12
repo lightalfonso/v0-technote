@@ -53,6 +53,9 @@ export const clients = pgTable('clients', {
   userId: text('userId').notNull(),
   name: text('name').notNull(),
   phone: text('phone'),
+  email: text('email'),
+  address: text('address'),
+  rut: text('rut'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
@@ -61,6 +64,7 @@ export const jobs = pgTable('jobs', {
   id: serial('id').primaryKey(),
   userId: text('userId').notNull(),
   clientId: integer('client_id').references(() => clients.id, { onDelete: 'cascade' }),
+  equipmentId: integer('equipment_id').references(() => equipment.id, { onDelete: 'set null' }),
   jobDate: date('job_date').notNull(),
   title: text('title').notNull(),
   description: text('description'),
