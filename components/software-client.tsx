@@ -245,11 +245,11 @@ function LicenseForm({
   const [showPurchasePass, setShowPurchasePass] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  // Filter equipment related to selected client
+  // Filter equipment related to selected client (loose comparison to be safe)
   const clientEquipment = useMemo(() => {
     if (clientSelection === 'none' || clientSelection === 'new') return []
-    const cid = parseInt(clientSelection)
-    return equipment.filter(e => e.clientId === cid)
+    const cidStr = clientSelection.toString()
+    return equipment.filter(e => e.clientId?.toString() === cidStr)
   }, [equipment, clientSelection])
 
   // Sync equipment selection when client changes
@@ -257,8 +257,8 @@ function LicenseForm({
     if (clientSelection === 'none' || clientSelection === 'new') {
       setEquipmentSelection('none')
     } else {
-      const cid = parseInt(clientSelection)
-      const isValid = clientEquipment.some(e => e.id.toString() === equipmentSelection)
+      const cidStr = clientSelection.toString()
+      const isValid = clientEquipment.some(e => e.id.toString() === equipmentSelection.toString())
       if (!isValid && equipmentSelection !== 'none' && equipmentSelection !== 'new') {
         setEquipmentSelection('none')
       }
@@ -379,7 +379,11 @@ function LicenseForm({
         <div className="flex flex-col gap-2">
           <Label>Tipo de licencia</Label>
           <Select value={licenseType} onValueChange={setLicenseType}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue>
+                {LICENSE_TYPES.find(t => t.value === licenseType)?.label ?? 'Seleccione tipo'}
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
               {LICENSE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
             </SelectContent>
@@ -412,7 +416,13 @@ function LicenseForm({
         <div className="flex flex-col gap-2 col-span-2">
           <Label>Categoría</Label>
           <Select value={categoryId} onValueChange={setCategoryId}>
-            <SelectTrigger><SelectValue placeholder="Sin categoría" /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue>
+                {categoryId === 'none' || !categoryId
+                  ? 'Sin categoría'
+                  : (categories.find(c => c.id.toString() === categoryId)?.name ?? 'Sin categoría')}
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">Sin categoría</SelectItem>
               {categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
@@ -469,7 +479,15 @@ function LicenseForm({
         <div className="flex flex-col gap-2 col-span-2">
           <Label>Seleccionar Cliente</Label>
           <Select value={clientSelection} onValueChange={setClientSelection}>
-            <SelectTrigger><SelectValue placeholder="Seleccione un cliente" /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue>
+                {clientSelection === 'none'
+                  ? 'Sin cliente asignado'
+                  : clientSelection === 'new'
+                    ? '➕ Crear nuevo cliente...'
+                    : (clients.find(c => c.id.toString() === clientSelection.toString())?.name ?? 'Seleccione cliente')}
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">Sin cliente asignado</SelectItem>
               <SelectItem value="new">➕ Crear nuevo cliente...</SelectItem>
@@ -553,15 +571,23 @@ function LicenseForm({
             <div className="col-span-2 text-xs text-muted-foreground bg-muted/50 p-2.5 rounded border border-border flex items-center gap-2">
               <Phone className="h-3.5 w-3.5 text-primary" />
               <span>
-                <strong>Cliente seleccionado:</strong> {clients.find(c => c.id.toString() === clientSelection)?.name || ''} 
-                {clients.find(c => c.id.toString() === clientSelection)?.phone ? ` | Teléfono: ${clients.find(c => c.id.toString() === clientSelection)?.phone}` : ''}
+                <strong>Cliente seleccionado:</strong> {clients.find(c => c.id.toString() === clientSelection.toString())?.name || ''} 
+                {clients.find(c => c.id.toString() === clientSelection.toString())?.phone ? ` | Teléfono: ${clients.find(c => c.id.toString() === clientSelection.toString())?.phone}` : ''}
               </span>
             </div>
 
             <div className="flex flex-col gap-2 col-span-2">
               <Label>Equipo del Cliente</Label>
               <Select value={equipmentSelection} onValueChange={setEquipmentSelection}>
-                <SelectTrigger><SelectValue placeholder="Seleccione un equipo" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue>
+                    {equipmentSelection === 'none'
+                      ? 'Sin equipo asignado'
+                      : equipmentSelection === 'new'
+                        ? '➕ Registrar nuevo equipo...'
+                        : (equipment.find(e => e.id.toString() === equipmentSelection.toString())?.name ?? 'Seleccione equipo')}
+                  </SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sin equipo asignado</SelectItem>
                   <SelectItem value="new">➕ Registrar nuevo equipo...</SelectItem>
@@ -661,6 +687,7 @@ export function SoftwareClient({
   // Search & filter states
   const [search, setSearch] = useState('')
   const [filterClient, setFilterClient] = useState('all')
+  const [filterEquipment, setFilterEquipment] = useState('all')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
   const [filterType, setFilterType] = useState('all')
@@ -676,6 +703,11 @@ export function SoftwareClient({
     setLicenses(initialLicenses)
   }, [initialLicenses])
 
+  // Reset equipment filter when client filter changes
+  useEffect(() => {
+    setFilterEquipment('all')
+  }, [filterClient])
+
   const catMap = Object.fromEntries(categories.map((c) => [c.id, c]))
 
   const filtered = licenses.filter((l) => {
@@ -685,16 +717,21 @@ export function SoftwareClient({
     
     const matchType = filterType === 'all' || l.licenseType === filterType
     
+    // Loose comparison for robustness
     const matchClient = filterClient === 'all' || 
       (filterClient === 'no-client' && !l.clientId && !l.clientName) ||
       (l.clientId?.toString() === filterClient) ||
       (l.clientName && clients.find(c => c.id.toString() === filterClient)?.name.toLowerCase() === l.clientName.toLowerCase())
       
+    const matchEquip = filterEquipment === 'all' ||
+      (filterEquipment === 'no-equipment' && !l.equipmentId) ||
+      (l.equipmentId?.toString() === filterEquipment)
+
     const purchaseDateStr = l.purchaseDate ? getIsoDateString(l.purchaseDate) : null
     const matchDateFrom = !filterDateFrom || (purchaseDateStr && purchaseDateStr >= filterDateFrom)
     const matchDateTo = !filterDateTo || (purchaseDateStr && purchaseDateStr <= filterDateTo)
     
-    return matchSearch && matchType && matchClient && !!matchDateFrom && !!matchDateTo
+    return matchSearch && matchType && matchClient && matchEquip && !!matchDateFrom && !!matchDateTo
   })
 
   const handleDelete = (id: number) => {
@@ -714,8 +751,8 @@ export function SoftwareClient({
     
     filtered.forEach((lic) => {
       const cat = lic.categoryId ? catMap[lic.categoryId] : null;
-      const clientObj = lic.clientId ? clients.find(c => c.id === lic.clientId) : null;
-      const equipObj = lic.equipmentId ? equipment.find(e => e.id === lic.equipmentId) : null;
+      const clientObj = lic.clientId ? clients.find(c => c.id.toString() === lic.clientId.toString()) : null;
+      const equipObj = lic.equipmentId ? equipment.find(e => e.id.toString() === lic.equipmentId.toString()) : null;
       fullTxt += exportLicenseToTxt(lic, cat?.name, clientObj, equipObj);
       fullTxt += `\n`;
     });
@@ -725,8 +762,8 @@ export function SoftwareClient({
 
   const handleExportSingle = (lic: SoftwareLicense) => {
     const cat = lic.categoryId ? catMap[lic.categoryId] : null;
-    const clientObj = lic.clientId ? clients.find(c => c.id === lic.clientId) : null;
-    const equipObj = lic.equipmentId ? equipment.find(e => e.id === lic.equipmentId) : null;
+    const clientObj = lic.clientId ? clients.find(c => c.id.toString() === lic.clientId.toString()) : null;
+    const equipObj = lic.equipmentId ? equipment.find(e => e.id.toString() === lic.equipmentId.toString()) : null;
     const txt = exportLicenseToTxt(lic, cat?.name, clientObj, equipObj);
     downloadTxtFile(`licencia-${lic.softwareName.toLowerCase().replace(/[^a-z0-9]/g, '-')}.txt`, txt);
   }
@@ -749,7 +786,7 @@ export function SoftwareClient({
       </div>
 
       {/* Filtros */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-6 bg-card border border-border p-4 rounded-xl shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6 bg-card border border-border p-4 rounded-xl shadow-sm">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar software, serial..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
@@ -757,7 +794,13 @@ export function SoftwareClient({
         
         <Select value={filterClient} onValueChange={setFilterClient}>
           <SelectTrigger className="w-full">
-            <SelectValue placeholder="Filtrar por cliente" />
+            <SelectValue>
+              {filterClient === 'all' 
+                ? 'Todos los clientes' 
+                : filterClient === 'no-client' 
+                  ? 'Sin cliente' 
+                  : (clients.find(c => c.id.toString() === filterClient)?.name ?? 'Filtrar por cliente')}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos los clientes</SelectItem>
@@ -768,8 +811,41 @@ export function SoftwareClient({
           </SelectContent>
         </Select>
 
+        <Select 
+          value={filterEquipment} 
+          onValueChange={setFilterEquipment} 
+          disabled={filterClient === 'all' || filterClient === 'no-client'}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue>
+              {filterClient === 'all' || filterClient === 'no-client'
+                ? 'Seleccione cliente'
+                : filterEquipment === 'all'
+                  ? 'Todos los equipos'
+                  : filterEquipment === 'no-equipment'
+                    ? 'Sin equipo'
+                    : (equipment.find(e => e.id.toString() === filterEquipment)?.name ?? 'Filtrar por equipo')}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los equipos</SelectItem>
+            {equipment
+              .filter((e) => e.clientId?.toString() === filterClient)
+              .map((e) => (
+                <SelectItem key={e.id} value={e.id.toString()}>{e.name}</SelectItem>
+              ))}
+            <SelectItem value="no-equipment">Sin equipo</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-full"><SelectValue placeholder="Tipo Licencia" /></SelectTrigger>
+          <SelectTrigger className="w-full">
+            <SelectValue>
+              {filterType === 'all'
+                ? 'Todos los tipos'
+                : (LICENSE_TYPES.find(t => t.value === filterType)?.label ?? 'Tipo Licencia')}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos los tipos</SelectItem>
             {LICENSE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -920,10 +996,10 @@ export function SoftwareClient({
                           </p>
                           <div className="space-y-1">
                             {(() => {
-                              const associatedClient = lic.clientId ? clients.find(c => c.id === lic.clientId) : null
+                              const associatedClient = lic.clientId ? clients.find(c => c.id.toString() === lic.clientId.toString()) : null
                               const dispName = associatedClient?.name || lic.clientName
                               const dispPhone = associatedClient?.phone || lic.clientPhone
-                              const associatedEquip = lic.equipmentId ? equipment.find(e => e.id === lic.equipmentId) : null
+                              const associatedEquip = lic.equipmentId ? equipment.find(e => e.id.toString() === lic.equipmentId.toString()) : null
 
                               return (
                                 <>
