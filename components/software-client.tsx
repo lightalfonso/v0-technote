@@ -123,9 +123,10 @@ function exportLicenseToTxt(lic: SoftwareLicense, catName?: string) {
   if (lic.downloadUrl) txt += `Enlace de descarga: ${lic.downloadUrl}\n`;
   if (lic.notes) txt += `Notas de licencia: ${lic.notes}\n`;
   
-  if (lic.purchasePlace || lic.purchaseUser || lic.purchasePassword) {
+  if (lic.purchasePlace || lic.purchaseUrl || lic.purchaseUser || lic.purchasePassword) {
     txt += `\nPORTAL DE COMPRA:\n`;
     if (lic.purchasePlace) txt += `- Lugar de compra: ${lic.purchasePlace}\n`;
+    if (lic.purchaseUrl) txt += `- URL del portal: ${lic.purchaseUrl}\n`;
     if (lic.purchaseUser) txt += `- Usuario del portal: ${lic.purchaseUser}\n`;
     if (lic.purchasePassword) txt += `- Contraseña del portal: ${lic.purchasePassword}\n`;
   }
@@ -163,6 +164,7 @@ function LicenseForm({ license, categories, onClose }: { license?: SoftwareLicen
   
   // New States
   const [purchasePlace, setPurchasePlace] = useState(license?.purchasePlace ?? '')
+  const [purchaseUrl, setPurchaseUrl] = useState(license?.purchaseUrl ?? '')
   const [purchaseUser, setPurchaseUser] = useState(license?.purchaseUser ?? '')
   const [purchasePassword, setPurchasePassword] = useState(license?.purchasePassword ?? '')
   const [clientName, setClientName] = useState(license?.clientName ?? '')
@@ -192,6 +194,7 @@ function LicenseForm({ license, categories, onClose }: { license?: SoftwareLicen
         notes: notes || undefined,
         categoryId: categoryId && categoryId !== 'none' ? parseInt(categoryId) : null,
         purchasePlace: purchasePlace || undefined,
+        purchaseUrl: purchaseUrl || undefined,
         purchaseUser: purchaseUser || undefined,
         purchasePassword: purchasePassword || undefined,
         clientName: clientName || undefined,
@@ -281,6 +284,10 @@ function LicenseForm({ license, categories, onClose }: { license?: SoftwareLicen
         <div className="flex flex-col gap-2">
           <Label>Usuario de compra</Label>
           <Input value={purchaseUser} onChange={(e) => setPurchaseUser(e.target.value)} placeholder="Nombre de usuario o correo" />
+        </div>
+        <div className="flex flex-col gap-2 col-span-2">
+          <Label>URL del portal de compra</Label>
+          <Input value={purchaseUrl} onChange={(e) => setPurchaseUrl(e.target.value)} placeholder="https://..." />
         </div>
         <div className="flex flex-col gap-2 col-span-2">
           <Label>Contraseña de compra</Label>
@@ -529,13 +536,42 @@ export function SoftwareClient({ initialLicenses, categories }: { initialLicense
                     {/* Detalles Adicionales */}
                     <div className="mt-3 pt-3 border-t border-border grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
                       {/* Portal de Compra */}
-                      {(lic.purchasePlace || lic.purchaseUser || lic.purchasePassword) && (
+                      {(lic.purchasePlace || lic.purchaseUrl || lic.purchaseUser || lic.purchasePassword) && (
                         <div className="bg-secondary/40 p-2.5 rounded-lg border border-border/50">
                           <p className="font-semibold text-primary mb-1.5 flex items-center gap-1.5">
                             <Lock className="h-3.5 w-3.5" /> Portal de Compra
                           </p>
                           <div className="space-y-1">
-                            {lic.purchasePlace && <p><span className="text-muted-foreground">Lugar:</span> {lic.purchasePlace}</p>}
+                            {lic.purchasePlace && (
+                              <p>
+                                <span className="text-muted-foreground">Lugar:</span>{' '}
+                                {lic.purchaseUrl ? (
+                                  <a href={lic.purchaseUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline inline-flex items-center gap-0.5">
+                                    {lic.purchasePlace} <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                ) : (
+                                  lic.purchasePlace
+                                )}
+                              </p>
+                            )}
+                            {lic.purchaseUrl && !lic.purchasePlace && (
+                              <p className="flex items-center gap-1">
+                                <span className="text-muted-foreground">Portal:</span>{' '}
+                                <a href={lic.purchaseUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate max-w-[120px] inline-block">
+                                  {lic.purchaseUrl}
+                                </a>
+                                <CopyButton text={lic.purchaseUrl} title="Copiar URL del portal" />
+                              </p>
+                            )}
+                            {lic.purchasePlace && lic.purchaseUrl && (
+                              <p className="flex items-center gap-1">
+                                <span className="text-muted-foreground font-semibold">URL:</span>{' '}
+                                <a href={lic.purchaseUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate max-w-[120px] inline-block">
+                                  Ir al portal
+                                </a>
+                                <CopyButton text={lic.purchaseUrl} title="Copiar URL del portal" />
+                              </p>
+                            )}
                             {lic.purchaseUser && <p><span className="text-muted-foreground">Usuario:</span> {lic.purchaseUser}</p>}
                             {lic.purchasePassword && (
                               <p className="flex items-center gap-1.5 flex-wrap">

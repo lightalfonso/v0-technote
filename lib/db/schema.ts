@@ -98,6 +98,7 @@ export const softwareLicenses = pgTable('software_licenses', {
   notes: text('notes'),
   categoryId: integer('category_id'),
   purchasePlace: text('purchase_place'),
+  purchaseUrl: text('purchase_url'),
   purchaseUser: text('purchase_user'),
   purchasePassword: text('purchase_password'),
   clientName: text('client_name'),

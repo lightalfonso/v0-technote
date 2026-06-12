@@ -31,6 +31,7 @@ export async function createSoftwareLicense(data: {
   notes?: string
   categoryId?: number | null
   purchasePlace?: string
+  purchaseUrl?: string
   purchaseUser?: string
   purchasePassword?: string
   clientName?: string
@@ -56,6 +57,7 @@ export async function createSoftwareLicense(data: {
     notes: data.notes ?? null,
     categoryId: data.categoryId ?? null,
     purchasePlace: data.purchasePlace ?? null,
+    purchaseUrl: data.purchaseUrl ?? null,
     purchaseUser: data.purchaseUser ?? null,
     purchasePassword: data.purchasePassword ?? null,
     clientName: data.clientName ?? null,
@@ -84,6 +86,7 @@ export async function updateSoftwareLicense(
     notes: string
     categoryId: number | null
     purchasePlace: string
+    purchaseUrl: string
     purchaseUser: string
     purchasePassword: string
     clientName: string
