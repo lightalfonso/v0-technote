@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect, useMemo } from 'react'
 import { createSoftwareLicense, updateSoftwareLicense, deleteSoftwareLicense } from '@/app/actions/software'
+import { createClient } from '@/app/actions/clients'
+import { createEquipment } from '@/app/actions/equipment'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,7 +33,7 @@ import {
   Phone,
   DollarSign
 } from 'lucide-react'
-import type { SoftwareLicense, Category } from '@/lib/db/schema'
+import type { SoftwareLicense, Category, Client, Equipment } from '@/lib/db/schema'
 
 const LICENSE_TYPES = [
   { value: 'perpetual', label: 'Perpetua' },
@@ -42,17 +44,53 @@ const LICENSE_TYPES = [
   { value: 'volume', label: 'Volumen' },
 ]
 
+function getIsoDateString(dateVal: string | Date | null): string {
+  if (!dateVal) return ''
+  if (dateVal instanceof Date) {
+    if (dateVal.getUTCHours() === 0 && dateVal.getUTCMinutes() === 0 && dateVal.getUTCSeconds() === 0) {
+      const year = dateVal.getUTCFullYear()
+      const month = String(dateVal.getUTCMonth() + 1).padStart(2, '0')
+      const day = String(dateVal.getUTCDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    } else {
+      const year = dateVal.getFullYear()
+      const month = String(dateVal.getMonth() + 1).padStart(2, '0')
+      const day = String(dateVal.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+  }
+  return dateVal.split('T')[0]
+}
+
 function formatLocalDate(dateVal: string | Date | null): string {
   if (!dateVal) return ''
-  let dateStr = ''
+  let year = ''
+  let month = ''
+  let day = ''
+
   if (dateVal instanceof Date) {
-    dateStr = dateVal.toISOString().slice(0, 10)
+    if (dateVal.getUTCHours() === 0 && dateVal.getUTCMinutes() === 0 && dateVal.getUTCSeconds() === 0) {
+      year = dateVal.getUTCFullYear().toString()
+      month = String(dateVal.getUTCMonth() + 1).padStart(2, '0')
+      day = String(dateVal.getUTCDate()).padStart(2, '0')
+    } else {
+      year = dateVal.getFullYear().toString()
+      month = String(dateVal.getMonth() + 1).padStart(2, '0')
+      day = String(dateVal.getDate()).padStart(2, '0')
+    }
   } else {
-    dateStr = dateVal
+    const dateStr = dateVal
+    const parts = dateStr.split('T')[0].split('-')
+    if (parts.length === 3) {
+      const [y, m, d] = parts
+      year = y
+      month = m
+      day = d
+    } else {
+      return dateStr
+    }
   }
-  const parts = dateStr.split('T')[0].split('-')
-  if (parts.length !== 3) return dateStr
-  const [year, month, day] = parts
+
   return `${day}-${month}-${year}`
 }
 
@@ -61,14 +99,8 @@ function daysUntilExpiry(dateVal: string | Date | null): number | null {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
-  let dateStr = ''
-  if (dateVal instanceof Date) {
-    dateStr = dateVal.toISOString().slice(0, 10)
-  } else {
-    dateStr = dateVal
-  }
-  
-  const parts = dateStr.split('T')[0].split('-')
+  const dateStr = getIsoDateString(dateVal)
+  const parts = dateStr.split('-')
   if (parts.length !== 3) return null
   const exp = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
   return Math.round((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
@@ -109,7 +141,12 @@ function downloadTxtFile(filename: string, text: string) {
   document.body.removeChild(element);
 }
 
-function exportLicenseToTxt(lic: SoftwareLicense, catName?: string) {
+function exportLicenseToTxt(
+  lic: SoftwareLicense, 
+  catName?: string, 
+  clientObj?: Client | null, 
+  equipObj?: Equipment | null
+) {
   let txt = `=========================================\n`;
   txt += `LICENCIA: ${lic.softwareName}\n`;
   txt += `=========================================\n`;
@@ -131,10 +168,13 @@ function exportLicenseToTxt(lic: SoftwareLicense, catName?: string) {
     if (lic.purchasePassword) txt += `- Contraseña del portal: ${lic.purchasePassword}\n`;
   }
   
-  if (lic.clientName || lic.clientPhone || lic.pricePaid || lic.installationNotes) {
+  const dispName = clientObj?.name || lic.clientName
+  const dispPhone = clientObj?.phone || lic.clientPhone
+  if (dispName || dispPhone || equipObj || lic.pricePaid || lic.installationNotes) {
     txt += `\nDATOS DE INSTALACIÓN & CLIENTE:\n`;
-    if (lic.clientName) txt += `- Cliente instalado: ${lic.clientName}\n`;
-    if (lic.clientPhone) txt += `- Teléfono del cliente: ${lic.clientPhone}\n`;
+    if (dispName) txt += `- Cliente instalado: ${dispName}\n`;
+    if (dispPhone) txt += `- Teléfono del cliente: ${dispPhone}\n`;
+    if (equipObj) txt += `- Equipo: ${equipObj.name}${equipObj.brand || equipObj.model ? ` (${[equipObj.brand, equipObj.model].filter(Boolean).join(' ')})` : ''}\n`;
     if (lic.pricePaid) txt += `- Monto pagado: CLP ${new Intl.NumberFormat('es-CL').format(lic.pricePaid)}\n`;
     if (lic.installationNotes) txt += `- Notas de instalación: ${lic.installationNotes}\n`;
   }
@@ -149,26 +189,53 @@ function exportLicenseToTxt(lic: SoftwareLicense, catName?: string) {
   return txt;
 }
 
-function LicenseForm({ license, categories, onClose }: { license?: SoftwareLicense; categories: Category[]; onClose: () => void }) {
+function LicenseForm({ 
+  license, 
+  categories, 
+  clients, 
+  equipment, 
+  onClose 
+}: { 
+  license?: SoftwareLicense; 
+  categories: Category[]; 
+  clients: Client[];
+  equipment: Equipment[];
+  onClose: () => void 
+}) {
   const [softwareName, setSoftwareName] = useState(license?.softwareName ?? '')
   const [version, setVersion] = useState(license?.version ?? '')
   const [serialKey, setSerialKey] = useState(license?.serialKey ?? '')
   const [licenseType, setLicenseType] = useState(license?.licenseType ?? 'perpetual')
-  const [purchaseDate, setPurchaseDate] = useState(license?.purchaseDate ?? '')
-  const [expiryDate, setExpiryDate] = useState(license?.expiryDate ?? '')
+  const [purchaseDate, setPurchaseDate] = useState(license ? getIsoDateString(license.purchaseDate) : '')
+  const [expiryDate, setExpiryDate] = useState(license ? getIsoDateString(license.expiryDate) : '')
   const [maxInstalls, setMaxInstalls] = useState(license?.maxInstalls?.toString() ?? '')
   const [currentInstalls, setCurrentInstalls] = useState(license?.currentInstalls?.toString() ?? '0')
   const [downloadUrl, setDownloadUrl] = useState(license?.downloadUrl ?? '')
   const [notes, setNotes] = useState(license?.notes ?? '')
   const [categoryId, setCategoryId] = useState(license?.categoryId?.toString() ?? '')
   
-  // New States
+  // Purchase Portal
   const [purchasePlace, setPurchasePlace] = useState(license?.purchasePlace ?? '')
   const [purchaseUrl, setPurchaseUrl] = useState(license?.purchaseUrl ?? '')
   const [purchaseUser, setPurchaseUser] = useState(license?.purchaseUser ?? '')
   const [purchasePassword, setPurchasePassword] = useState(license?.purchasePassword ?? '')
-  const [clientName, setClientName] = useState(license?.clientName ?? '')
-  const [clientPhone, setClientPhone] = useState(license?.clientPhone ?? '')
+  
+  // Client and Equipment Selection
+  const [clientSelection, setClientSelection] = useState<string>(
+    license?.clientId?.toString() ?? 'none'
+  )
+  const [newClientName, setNewClientName] = useState('')
+  const [newClientPhone, setNewClientPhone] = useState('')
+  
+  const [equipmentSelection, setEquipmentSelection] = useState<string>(
+    license?.equipmentId?.toString() ?? 'none'
+  )
+  const [newEquipmentName, setNewEquipmentName] = useState('')
+  const [newEquipmentBrand, setNewEquipmentBrand] = useState('')
+  const [newEquipmentModel, setNewEquipmentModel] = useState('')
+  const [createEquipmentForNewClient, setCreateEquipmentForNewClient] = useState(false)
+
+  // Details
   const [pricePaid, setPricePaid] = useState(license?.pricePaid?.toString() ?? '')
   const [installationNotes, setInstallationNotes] = useState(license?.installationNotes ?? '')
   const [warrantyDuration, setWarrantyDuration] = useState(license?.warrantyDuration ?? '')
@@ -178,9 +245,90 @@ function LicenseForm({ license, categories, onClose }: { license?: SoftwareLicen
   const [showPurchasePass, setShowPurchasePass] = useState(false)
   const [isPending, startTransition] = useTransition()
 
+  // Filter equipment related to selected client
+  const clientEquipment = useMemo(() => {
+    if (clientSelection === 'none' || clientSelection === 'new') return []
+    const cid = parseInt(clientSelection)
+    return equipment.filter(e => e.clientId === cid)
+  }, [equipment, clientSelection])
+
+  // Sync equipment selection when client changes
+  useEffect(() => {
+    if (clientSelection === 'none' || clientSelection === 'new') {
+      setEquipmentSelection('none')
+    } else {
+      const cid = parseInt(clientSelection)
+      const isValid = clientEquipment.some(e => e.id.toString() === equipmentSelection)
+      if (!isValid && equipmentSelection !== 'none' && equipmentSelection !== 'new') {
+        setEquipmentSelection('none')
+      }
+    }
+  }, [clientSelection, clientEquipment, equipmentSelection])
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     startTransition(async () => {
+      let finalClientId: number | null = null
+      let finalEquipmentId: number | null = null
+      let finalClientName = ''
+      let finalClientPhone = ''
+
+      // 1. Client flow
+      if (clientSelection === 'new') {
+        if (!newClientName.trim()) return
+        const createdClient = await createClient({
+          name: newClientName.trim(),
+          phone: newClientPhone.trim() || undefined,
+        })
+        if (createdClient?.id) {
+          finalClientId = createdClient.id
+          finalClientName = newClientName.trim()
+          finalClientPhone = newClientPhone.trim()
+        }
+      } else if (clientSelection !== 'none') {
+        const cid = parseInt(clientSelection)
+        finalClientId = cid
+        const selectedClient = clients.find(c => c.id === cid)
+        if (selectedClient) {
+          finalClientName = selectedClient.name
+          finalClientPhone = selectedClient.phone ?? ''
+        }
+      }
+
+      // 2. Equipment flow
+      if (clientSelection === 'new') {
+        if (createEquipmentForNewClient && newEquipmentName.trim()) {
+          const createdEquip = await createEquipment({
+            name: newEquipmentName.trim(),
+            brand: newEquipmentBrand.trim() || undefined,
+            model: newEquipmentModel.trim() || undefined,
+            clientId: finalClientId,
+            ownerName: finalClientName || undefined,
+            ownerType: 'client',
+          })
+          if (createdEquip?.id) {
+            finalEquipmentId = createdEquip.id
+          }
+        }
+      } else if (clientSelection !== 'none') {
+        if (equipmentSelection === 'new') {
+          if (!newEquipmentName.trim()) return
+          const createdEquip = await createEquipment({
+            name: newEquipmentName.trim(),
+            brand: newEquipmentBrand.trim() || undefined,
+            model: newEquipmentModel.trim() || undefined,
+            clientId: finalClientId,
+            ownerName: finalClientName || undefined,
+            ownerType: 'client',
+          })
+          if (createdEquip?.id) {
+            finalEquipmentId = createdEquip.id
+          }
+        } else if (equipmentSelection !== 'none') {
+          finalEquipmentId = parseInt(equipmentSelection)
+        }
+      }
+
       const data = {
         softwareName,
         version: version || undefined,
@@ -197,14 +345,17 @@ function LicenseForm({ license, categories, onClose }: { license?: SoftwareLicen
         purchaseUrl: purchaseUrl || undefined,
         purchaseUser: purchaseUser || undefined,
         purchasePassword: purchasePassword || undefined,
-        clientName: clientName || undefined,
-        clientPhone: clientPhone || undefined,
+        clientName: finalClientName || undefined,
+        clientPhone: finalClientPhone || undefined,
         pricePaid: pricePaid ? parseInt(pricePaid) : undefined,
         installationNotes: installationNotes || undefined,
         warrantyDuration: warrantyDuration || undefined,
         warrantyCoverage: warrantyCoverage || undefined,
         activationType: activationType || undefined,
+        clientId: finalClientId,
+        equipmentId: finalEquipmentId,
       }
+
       if (license) {
         await updateSoftwareLicense(license.id, data)
       } else {
@@ -315,14 +466,149 @@ function LicenseForm({ license, categories, onClose }: { license?: SoftwareLicen
         <div className="col-span-2 border-t border-border pt-3 mt-1">
           <h4 className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Instalación & Cliente</h4>
         </div>
-        <div className="flex flex-col gap-2">
-          <Label>Cliente instalado</Label>
-          <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Nombre del cliente" />
+        <div className="flex flex-col gap-2 col-span-2">
+          <Label>Seleccionar Cliente</Label>
+          <Select value={clientSelection} onValueChange={setClientSelection}>
+            <SelectTrigger><SelectValue placeholder="Seleccione un cliente" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin cliente asignado</SelectItem>
+              <SelectItem value="new">➕ Crear nuevo cliente...</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id.toString()}>
+                  {c.name} {c.phone ? `(${c.phone})` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <div className="flex flex-col gap-2">
-          <Label>Teléfono del cliente</Label>
-          <Input value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="Ej: +56 9 1234 5678" />
-        </div>
+
+        {clientSelection === 'new' && (
+          <>
+            <div className="flex flex-col gap-2">
+              <Label>Nombre del cliente nuevo</Label>
+              <Input 
+                value={newClientName} 
+                onChange={(e) => setNewClientName(e.target.value)} 
+                placeholder="Nombre del cliente" 
+                required={clientSelection === 'new'}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>Teléfono del cliente nuevo</Label>
+              <Input 
+                value={newClientPhone} 
+                onChange={(e) => setNewClientPhone(e.target.value)} 
+                placeholder="Ej: +56 9 1234 5678" 
+              />
+            </div>
+            <div className="col-span-2 flex items-center gap-2 mt-1">
+              <input 
+                type="checkbox" 
+                id="createEquipmentForNewClient" 
+                checked={createEquipmentForNewClient} 
+                onChange={(e) => setCreateEquipmentForNewClient(e.target.checked)}
+                className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+              />
+              <Label htmlFor="createEquipmentForNewClient" className="cursor-pointer font-normal text-xs text-muted-foreground">
+                Registrar también un equipo para este nuevo cliente
+              </Label>
+            </div>
+            {createEquipmentForNewClient && (
+              <div className="col-span-2 grid grid-cols-2 gap-3 bg-secondary/20 p-3 rounded-lg border border-border/50">
+                <div className="col-span-2">
+                  <h5 className="text-xs font-semibold text-foreground">Detalles del Nuevo Equipo</h5>
+                </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <Label>Nombre del equipo</Label>
+                  <Input 
+                    value={newEquipmentName} 
+                    onChange={(e) => setNewEquipmentName(e.target.value)} 
+                    placeholder="Ej: HP EliteBook G3 (1)" 
+                    required={createEquipmentForNewClient}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Marca (Opcional)</Label>
+                  <Input 
+                    value={newEquipmentBrand} 
+                    onChange={(e) => setNewEquipmentBrand(e.target.value)} 
+                    placeholder="Ej: HP" 
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Modelo (Opcional)</Label>
+                  <Input 
+                    value={newEquipmentModel} 
+                    onChange={(e) => setNewEquipmentModel(e.target.value)} 
+                    placeholder="Ej: EliteBook G3" 
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {clientSelection !== 'none' && clientSelection !== 'new' && (
+          <>
+            <div className="col-span-2 text-xs text-muted-foreground bg-muted/50 p-2.5 rounded border border-border flex items-center gap-2">
+              <Phone className="h-3.5 w-3.5 text-primary" />
+              <span>
+                <strong>Cliente seleccionado:</strong> {clients.find(c => c.id.toString() === clientSelection)?.name || ''} 
+                {clients.find(c => c.id.toString() === clientSelection)?.phone ? ` | Teléfono: ${clients.find(c => c.id.toString() === clientSelection)?.phone}` : ''}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-2 col-span-2">
+              <Label>Equipo del Cliente</Label>
+              <Select value={equipmentSelection} onValueChange={setEquipmentSelection}>
+                <SelectTrigger><SelectValue placeholder="Seleccione un equipo" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin equipo asignado</SelectItem>
+                  <SelectItem value="new">➕ Registrar nuevo equipo...</SelectItem>
+                  {clientEquipment.map((e) => (
+                    <SelectItem key={e.id} value={e.id.toString()}>
+                      {e.name} {e.brand || e.model ? `(${[e.brand, e.model].filter(Boolean).join(' ')})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {equipmentSelection === 'new' && (
+              <div className="col-span-2 grid grid-cols-2 gap-3 bg-secondary/20 p-3 rounded-lg border border-border/50">
+                <div className="col-span-2">
+                  <h5 className="text-xs font-semibold text-foreground">Detalles del Nuevo Equipo</h5>
+                </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <Label>Nombre del equipo</Label>
+                  <Input 
+                    value={newEquipmentName} 
+                    onChange={(e) => setNewEquipmentName(e.target.value)} 
+                    placeholder="Ej: HP EliteBook G3 (1)" 
+                    required={equipmentSelection === 'new'}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Marca (Opcional)</Label>
+                  <Input 
+                    value={newEquipmentBrand} 
+                    onChange={(e) => setNewEquipmentBrand(e.target.value)} 
+                    placeholder="Ej: HP" 
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Modelo (Opcional)</Label>
+                  <Input 
+                    value={newEquipmentModel} 
+                    onChange={(e) => setNewEquipmentModel(e.target.value)} 
+                    placeholder="Ej: EliteBook G3" 
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
         <div className="flex flex-col gap-2 col-span-2">
           <Label>Cuánto pagó (CLP)</Label>
           <Input type="number" value={pricePaid} onChange={(e) => setPricePaid(e.target.value)} placeholder="Ej: 35000" />
@@ -345,7 +631,7 @@ function LicenseForm({ license, categories, onClose }: { license?: SoftwareLicen
           <Input value={activationType} onChange={(e) => setActivationType(e.target.value)} placeholder="Ej: Por teléfono (Office), Online, KMS" />
         </div>
 
-        {/* Notas de Instalación */}
+        {/* Notas específicas de Instalación */}
         <div className="col-span-2 border-t border-border pt-3 mt-1">
           <Label>Notas de la instalación</Label>
           <Textarea value={installationNotes} onChange={(e) => setInstallationNotes(e.target.value)} rows={2} placeholder="Detalles de instalación o equipo..." className="resize-none" />
@@ -359,12 +645,22 @@ function LicenseForm({ license, categories, onClose }: { license?: SoftwareLicen
   )
 }
 
-export function SoftwareClient({ initialLicenses, categories }: { initialLicenses: SoftwareLicense[]; categories: Category[] }) {
+export function SoftwareClient({ 
+  initialLicenses, 
+  categories,
+  clients = [],
+  equipment = []
+}: { 
+  initialLicenses: SoftwareLicense[]; 
+  categories: Category[];
+  clients?: Client[];
+  equipment?: Equipment[];
+}) {
   const [licenses, setLicenses] = useState(initialLicenses)
   
   // Search & filter states
   const [search, setSearch] = useState('')
-  const [filterClient, setFilterClient] = useState('')
+  const [filterClient, setFilterClient] = useState('all')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
   const [filterType, setFilterType] = useState('all')
@@ -375,6 +671,11 @@ export function SoftwareClient({ initialLicenses, categories }: { initialLicense
   const [showPasswords, setShowPasswords] = useState<Record<number, boolean>>({})
   const [isPending, startTransition] = useTransition()
 
+  // Sync state with incoming server props
+  useEffect(() => {
+    setLicenses(initialLicenses)
+  }, [initialLicenses])
+
   const catMap = Object.fromEntries(categories.map((c) => [c.id, c]))
 
   const filtered = licenses.filter((l) => {
@@ -384,11 +685,14 @@ export function SoftwareClient({ initialLicenses, categories }: { initialLicense
     
     const matchType = filterType === 'all' || l.licenseType === filterType
     
-    const matchClient = !filterClient || 
-      (l.clientName ?? '').toLowerCase().includes(filterClient.toLowerCase())
+    const matchClient = filterClient === 'all' || 
+      (filterClient === 'no-client' && !l.clientId && !l.clientName) ||
+      (l.clientId?.toString() === filterClient) ||
+      (l.clientName && clients.find(c => c.id.toString() === filterClient)?.name.toLowerCase() === l.clientName.toLowerCase())
       
-    const matchDateFrom = !filterDateFrom || (l.purchaseDate && l.purchaseDate >= filterDateFrom)
-    const matchDateTo = !filterDateTo || (l.purchaseDate && l.purchaseDate <= filterDateTo)
+    const purchaseDateStr = l.purchaseDate ? getIsoDateString(l.purchaseDate) : null
+    const matchDateFrom = !filterDateFrom || (purchaseDateStr && purchaseDateStr >= filterDateFrom)
+    const matchDateTo = !filterDateTo || (purchaseDateStr && purchaseDateStr <= filterDateTo)
     
     return matchSearch && matchType && matchClient && !!matchDateFrom && !!matchDateTo
   })
@@ -410,7 +714,9 @@ export function SoftwareClient({ initialLicenses, categories }: { initialLicense
     
     filtered.forEach((lic) => {
       const cat = lic.categoryId ? catMap[lic.categoryId] : null;
-      fullTxt += exportLicenseToTxt(lic, cat?.name);
+      const clientObj = lic.clientId ? clients.find(c => c.id === lic.clientId) : null;
+      const equipObj = lic.equipmentId ? equipment.find(e => e.id === lic.equipmentId) : null;
+      fullTxt += exportLicenseToTxt(lic, cat?.name, clientObj, equipObj);
       fullTxt += `\n`;
     });
     
@@ -419,7 +725,9 @@ export function SoftwareClient({ initialLicenses, categories }: { initialLicense
 
   const handleExportSingle = (lic: SoftwareLicense) => {
     const cat = lic.categoryId ? catMap[lic.categoryId] : null;
-    const txt = exportLicenseToTxt(lic, cat?.name);
+    const clientObj = lic.clientId ? clients.find(c => c.id === lic.clientId) : null;
+    const equipObj = lic.equipmentId ? equipment.find(e => e.id === lic.equipmentId) : null;
+    const txt = exportLicenseToTxt(lic, cat?.name, clientObj, equipObj);
     downloadTxtFile(`licencia-${lic.softwareName.toLowerCase().replace(/[^a-z0-9]/g, '-')}.txt`, txt);
   }
 
@@ -446,10 +754,20 @@ export function SoftwareClient({ initialLicenses, categories }: { initialLicense
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar software, serial..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <div className="relative">
-          <UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Filtrar por cliente..." value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="pl-9" />
-        </div>
+        
+        <Select value={filterClient} onValueChange={setFilterClient}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Filtrar por cliente" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los clientes</SelectItem>
+            {clients.map((c) => (
+              <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+            ))}
+            <SelectItem value="no-client">Sin cliente</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-full"><SelectValue placeholder="Tipo Licencia" /></SelectTrigger>
           <SelectContent>
@@ -457,6 +775,7 @@ export function SoftwareClient({ initialLicenses, categories }: { initialLicense
             {LICENSE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
           </SelectContent>
         </Select>
+        
         <div className="flex items-center gap-1.5 border border-border px-2 rounded-lg bg-secondary/30">
           <Calendar className="h-4 w-4 text-muted-foreground" />
           <div className="flex-1 flex flex-col">
@@ -594,14 +913,44 @@ export function SoftwareClient({ initialLicenses, categories }: { initialLicense
                       )}
 
                       {/* Instalación & Cliente */}
-                      {(lic.clientName || lic.clientPhone || lic.pricePaid || lic.installationNotes) && (
+                      {(lic.clientName || lic.clientPhone || lic.clientId || lic.equipmentId || lic.pricePaid) && (
                         <div className="bg-secondary/40 p-2.5 rounded-lg border border-border/50 col-span-1 md:col-span-2 lg:col-span-1">
                           <p className="font-semibold text-primary mb-1.5 flex items-center gap-1.5">
                             <UserPlus className="h-3.5 w-3.5" /> Instalación & Cliente
                           </p>
                           <div className="space-y-1">
-                            {lic.clientName && <p><span className="text-muted-foreground">Cliente:</span> {lic.clientName}</p>}
-                            {lic.clientPhone && <p><span className="text-muted-foreground">Teléfono:</span> {lic.clientPhone}</p>}
+                            {(() => {
+                              const associatedClient = lic.clientId ? clients.find(c => c.id === lic.clientId) : null
+                              const dispName = associatedClient?.name || lic.clientName
+                              const dispPhone = associatedClient?.phone || lic.clientPhone
+                              const associatedEquip = lic.equipmentId ? equipment.find(e => e.id === lic.equipmentId) : null
+
+                              return (
+                                <>
+                                  {dispName && (
+                                    <p>
+                                      <span className="text-muted-foreground">Cliente:</span>{' '}
+                                      <span 
+                                        className="font-medium cursor-pointer text-primary hover:underline"
+                                        onClick={() => setFilterClient(lic.clientId?.toString() || 'all')}
+                                        title="Filtrar por este cliente"
+                                      >
+                                        {dispName}
+                                      </span>
+                                    </p>
+                                  )}
+                                  {dispPhone && <p><span className="text-muted-foreground">Teléfono:</span> {dispPhone}</p>}
+                                  {associatedEquip && (
+                                    <p>
+                                      <span className="text-muted-foreground">Equipo:</span>{' '}
+                                      <span className="font-medium text-foreground flex items-center gap-1 mt-0.5">
+                                        <Laptop className="h-3 w-3 text-muted-foreground" /> {associatedEquip.name}
+                                      </span>
+                                    </p>
+                                  )}
+                                </>
+                              )
+                            })()}
                             {lic.pricePaid && (
                               <p>
                                 <span className="text-muted-foreground">Pagó:</span>{' '}
@@ -662,7 +1011,13 @@ export function SoftwareClient({ initialLicenses, categories }: { initialLicense
           <DialogHeader>
             <DialogTitle>{editLicense ? 'Editar licencia' : 'Agregar licencia'}</DialogTitle>
           </DialogHeader>
-          <LicenseForm license={editLicense} categories={categories} onClose={() => { setIsOpen(false); setEditLicense(undefined) }} />
+          <LicenseForm 
+            license={editLicense} 
+            categories={categories} 
+            clients={clients}
+            equipment={equipment}
+            onClose={() => { setIsOpen(false); setEditLicense(undefined) }} 
+          />
         </DialogContent>
       </Dialog>
 

@@ -48,6 +48,15 @@ export const verification = pgTable('verification', {
 })
 
 // --- App tables ------------------------------------------------------------
+export const clients = pgTable('clients', {
+  id: serial('id').primaryKey(),
+  userId: text('userId').notNull(),
+  name: text('name').notNull(),
+  phone: text('phone'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+})
+
 export const categories = pgTable('categories', {
   id: serial('id').primaryKey(),
   userId: text('userId').notNull(),
@@ -108,6 +117,8 @@ export const softwareLicenses = pgTable('software_licenses', {
   warrantyDuration: text('warranty_duration'),
   warrantyCoverage: text('warranty_coverage'),
   activationType: text('activation_type'),
+  clientId: integer('client_id').references(() => clients.id, { onDelete: 'set null' }),
+  equipmentId: integer('equipment_id').references(() => equipment.id, { onDelete: 'set null' }),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
@@ -129,11 +140,13 @@ export const equipment = pgTable('equipment', {
   notes: text('notes'),
   status: text('status').notNull().default('active'),
   lastMaintenance: date('last_maintenance'),
+  clientId: integer('client_id').references(() => clients.id, { onDelete: 'set null' }),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
 
 // Types
+export type Client = typeof clients.$inferSelect
 export type Category = typeof categories.$inferSelect
 export type Note = typeof notes.$inferSelect
 export type AgendaEvent = typeof agendaEvents.$inferSelect
