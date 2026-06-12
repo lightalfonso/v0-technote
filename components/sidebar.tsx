@@ -15,12 +15,14 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Wrench,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 
 const navItems = [
   { href: '/dashboard', label: 'Inicio', icon: LayoutDashboard, exact: true },
+  { href: '/dashboard/trabajos', label: 'Trabajos', icon: Wrench },
   { href: '/dashboard/notas', label: 'Notas', icon: StickyNote },
   { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarDays },
   { href: '/dashboard/software', label: 'Software & Licencias', icon: Laptop },

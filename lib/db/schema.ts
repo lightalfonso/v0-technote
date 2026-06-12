@@ -57,6 +57,30 @@ export const clients = pgTable('clients', {
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
 
+export const jobs = pgTable('jobs', {
+  id: serial('id').primaryKey(),
+  userId: text('userId').notNull(),
+  clientId: integer('client_id').references(() => clients.id, { onDelete: 'cascade' }),
+  jobDate: date('job_date').notNull(),
+  title: text('title').notNull(),
+  description: text('description'),
+  workNotes: text('work_notes'),
+  problemsFound: text('problems_found'),
+  problemsSolved: text('problems_solved'),
+  recommendations: text('recommendations'),
+  warrantyDuration: text('warranty_duration'),
+  warrantyExpiry: date('warranty_expiry'),
+  pricePaid: integer('price_paid'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+})
+
+export const jobEquipment = pgTable('job_equipment', {
+  id: serial('id').primaryKey(),
+  jobId: integer('job_id').references(() => jobs.id, { onDelete: 'cascade' }).notNull(),
+  equipmentId: integer('equipment_id').references(() => equipment.id, { onDelete: 'cascade' }).notNull(),
+})
+
 export const categories = pgTable('categories', {
   id: serial('id').primaryKey(),
   userId: text('userId').notNull(),
@@ -119,6 +143,7 @@ export const softwareLicenses = pgTable('software_licenses', {
   activationType: text('activation_type'),
   clientId: integer('client_id').references(() => clients.id, { onDelete: 'set null' }),
   equipmentId: integer('equipment_id').references(() => equipment.id, { onDelete: 'set null' }),
+  jobId: integer('job_id').references(() => jobs.id, { onDelete: 'set null' }),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
@@ -153,3 +178,5 @@ export type Note = typeof notes.$inferSelect
 export type AgendaEvent = typeof agendaEvents.$inferSelect
 export type SoftwareLicense = typeof softwareLicenses.$inferSelect
 export type Equipment = typeof equipment.$inferSelect
+export type Job = typeof jobs.$inferSelect
+export type JobEquipment = typeof jobEquipment.$inferSelect

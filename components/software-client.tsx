@@ -31,9 +31,10 @@ import {
   Calendar,
   Lock,
   Phone,
-  DollarSign
+  DollarSign,
+  Briefcase
 } from 'lucide-react'
-import type { SoftwareLicense, Category, Client, Equipment } from '@/lib/db/schema'
+import type { SoftwareLicense, Category, Client, Equipment, Job } from '@/lib/db/schema'
 
 const LICENSE_TYPES = [
   { value: 'perpetual', label: 'Perpetua' },
@@ -145,7 +146,8 @@ function exportLicenseToTxt(
   lic: SoftwareLicense, 
   catName?: string, 
   clientObj?: Client | null, 
-  equipObj?: Equipment | null
+  equipObj?: Equipment | null,
+  jobObj?: Job | null
 ) {
   let txt = `=========================================\n`;
   txt += `LICENCIA: ${lic.softwareName}\n`;
@@ -170,16 +172,12 @@ function exportLicenseToTxt(
   
   const dispName = clientObj?.name || lic.clientName
   const dispPhone = clientObj?.phone || lic.clientPhone
-  if (dispName || dispPhone || equipObj || lic.pricePaid || lic.installationNotes) {
+  if (dispName || dispPhone || equipObj || lic.pricePaid || lic.installationNotes || jobObj) {
     txt += `\nDATOS DE INSTALACIÓN & CLIENTE:\n`;
     if (dispName) txt += `- Cliente instalado: ${dispName}\n`;
     if (dispPhone) txt += `- Teléfono del cliente: ${dispPhone}\n`;
-    if (equipObj) {
-      txt += `- Equipo: ${equipObj.name}${equipObj.brand || equipObj.model ? ` (${[equipObj.brand, equipObj.model].filter(Boolean).join(' ')})` : ''}\n`;
-      if (equipObj.pricePaid) {
-        txt += `- Cobro por equipo: CLP ${new Intl.NumberFormat('es-CL').format(equipObj.pricePaid)}\n`;
-      }
-    }
+    if (equipObj) txt += `- Equipo: ${equipObj.name}${equipObj.brand || equipObj.model ? ` (${[equipObj.brand, equipObj.model].filter(Boolean).join(' ')})` : ''}\n`;
+    if (jobObj) txt += `- Trabajo Asociado: ${jobObj.title} (${formatLocalDate(jobObj.jobDate)})\n`;
     if (lic.pricePaid) txt += `- Cobro por licencia: CLP ${new Intl.NumberFormat('es-CL').format(lic.pricePaid)}\n`;
     if (lic.installationNotes) txt += `- Notas de instalación: ${lic.installationNotes}\n`;
   }
@@ -199,12 +197,14 @@ function LicenseForm({
   categories, 
   clients, 
   equipment, 
+  jobs,
   onClose 
 }: { 
   license?: SoftwareLicense; 
   categories: Category[]; 
   clients: Client[];
   equipment: Equipment[];
+  jobs: Job[];
   onClose: () => void 
 }) {
   const [softwareName, setSoftwareName] = useState(license?.softwareName ?? '')
@@ -225,7 +225,7 @@ function LicenseForm({
   const [purchaseUser, setPurchaseUser] = useState(license?.purchaseUser ?? '')
   const [purchasePassword, setPurchasePassword] = useState(license?.purchasePassword ?? '')
   
-  // Client and Equipment Selection
+  // Client, Equipment and Job Selection
   const [clientSelection, setClientSelection] = useState<string>(
     license?.clientId?.toString() ?? 'none'
   )
@@ -241,6 +241,10 @@ function LicenseForm({
   const [createEquipmentForNewClient, setCreateEquipmentForNewClient] = useState(false)
   const [newEquipmentPricePaid, setNewEquipmentPricePaid] = useState('')
   const [equipPricePaid, setEquipPricePaid] = useState('')
+
+  const [jobSelection, setJobSelection] = useState<string>(
+    license?.jobId?.toString() ?? 'none'
+  )
 
   // Details
   const [pricePaid, setPricePaid] = useState(license?.pricePaid?.toString() ?? '')
@@ -259,18 +263,32 @@ function LicenseForm({
     return equipment.filter(e => e.clientId?.toString() === cidStr)
   }, [equipment, clientSelection])
 
-  // Sync equipment selection when client changes
+  // Filter jobs related to selected client
+  const clientJobs = useMemo(() => {
+    if (clientSelection === 'none' || clientSelection === 'new') return []
+    const cidStr = clientSelection.toString()
+    return jobs.filter(j => j.clientId?.toString() === cidStr)
+  }, [jobs, clientSelection])
+
+  // Sync equipment and job selections when client changes
   useEffect(() => {
     if (clientSelection === 'none' || clientSelection === 'new') {
       setEquipmentSelection('none')
+      setJobSelection('none')
     } else {
       const cidStr = clientSelection.toString()
-      const isValid = clientEquipment.some(e => e.id.toString() === equipmentSelection.toString())
-      if (!isValid && equipmentSelection !== 'none' && equipmentSelection !== 'new') {
+      
+      const isEquipValid = clientEquipment.some(e => e.id.toString() === equipmentSelection.toString())
+      if (!isEquipValid && equipmentSelection !== 'none' && equipmentSelection !== 'new') {
         setEquipmentSelection('none')
       }
+
+      const isJobValid = clientJobs.some(j => j.id.toString() === jobSelection.toString())
+      if (!isJobValid && jobSelection !== 'none') {
+        setJobSelection('none')
+      }
     }
-  }, [clientSelection, clientEquipment, equipmentSelection])
+  }, [clientSelection, clientEquipment, clientJobs, equipmentSelection, jobSelection])
 
   // Sync pricePaid input when selected equipment changes
   useEffect(() => {
@@ -380,6 +398,7 @@ function LicenseForm({
         activationType: activationType || undefined,
         clientId: finalClientId,
         equipmentId: finalEquipmentId,
+        jobId: jobSelection === 'none' ? null : parseInt(jobSelection),
       }
 
       if (license) {
@@ -691,6 +710,26 @@ function LicenseForm({
                 </span>
               </div>
             )}
+
+            {/* Job Selection inside LicenseForm */}
+            <div className="flex flex-col gap-2 col-span-2">
+              <Label>Trabajo Realizado Asociado (Opcional)</Label>
+              <Select value={jobSelection} onValueChange={setJobSelection}>
+                <SelectTrigger>
+                  <SelectValue>
+                    {jobSelection === 'none'
+                      ? 'Sin trabajo asociado'
+                      : (clientJobs.find(j => j.id.toString() === jobSelection.toString())?.title ?? 'Seleccione trabajo')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin trabajo asociado</SelectItem>
+                  {clientJobs.map((j) => (
+                    <SelectItem key={j.id} value={j.id.toString()}>{j.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </>
         )}
 
@@ -734,12 +773,14 @@ export function SoftwareClient({
   initialLicenses, 
   categories,
   clients = [],
-  equipment = []
+  equipment = [],
+  jobs = []
 }: { 
   initialLicenses: SoftwareLicense[]; 
   categories: Category[];
   clients?: Client[];
   equipment?: Equipment[];
+  jobs?: Job[];
 }) {
   const [licenses, setLicenses] = useState(initialLicenses)
   
@@ -812,7 +853,8 @@ export function SoftwareClient({
       const cat = lic.categoryId ? catMap[lic.categoryId] : null;
       const clientObj = lic.clientId ? clients.find(c => c.id.toString() === lic.clientId.toString()) : null;
       const equipObj = lic.equipmentId ? equipment.find(e => e.id.toString() === lic.equipmentId.toString()) : null;
-      fullTxt += exportLicenseToTxt(lic, cat?.name, clientObj, equipObj);
+      const jobObj = lic.jobId ? jobs.find(j => j.id.toString() === lic.jobId.toString()) : null;
+      fullTxt += exportLicenseToTxt(lic, cat?.name, clientObj, equipObj, jobObj);
       fullTxt += `\n`;
     });
     
@@ -823,7 +865,8 @@ export function SoftwareClient({
     const cat = lic.categoryId ? catMap[lic.categoryId] : null;
     const clientObj = lic.clientId ? clients.find(c => c.id.toString() === lic.clientId.toString()) : null;
     const equipObj = lic.equipmentId ? equipment.find(e => e.id.toString() === lic.equipmentId.toString()) : null;
-    const txt = exportLicenseToTxt(lic, cat?.name, clientObj, equipObj);
+    const jobObj = lic.jobId ? jobs.find(j => j.id.toString() === lic.jobId.toString()) : null;
+    const txt = exportLicenseToTxt(lic, cat?.name, clientObj, equipObj, jobObj);
     downloadTxtFile(`licencia-${lic.softwareName.toLowerCase().replace(/[^a-z0-9]/g, '-')}.txt`, txt);
   }
 
@@ -1048,7 +1091,7 @@ export function SoftwareClient({
                       )}
 
                       {/* Instalación & Cliente */}
-                      {(lic.clientName || lic.clientPhone || lic.clientId || lic.equipmentId || lic.pricePaid) && (
+                      {(lic.clientName || lic.clientPhone || lic.clientId || lic.equipmentId || lic.pricePaid || lic.jobId) && (
                         <div className="bg-secondary/40 p-2.5 rounded-lg border border-border/50 col-span-1 md:col-span-2 lg:col-span-1">
                           <p className="font-semibold text-primary mb-1.5 flex items-center gap-1.5">
                             <UserPlus className="h-3.5 w-3.5" /> Instalación & Cliente
@@ -1059,6 +1102,7 @@ export function SoftwareClient({
                               const dispName = associatedClient?.name || lic.clientName
                               const dispPhone = associatedClient?.phone || lic.clientPhone
                               const associatedEquip = lic.equipmentId ? equipment.find(e => e.id.toString() === lic.equipmentId.toString()) : null
+                              const associatedJob = lic.jobId ? jobs.find(j => j.id.toString() === lic.jobId.toString()) : null
 
                               return (
                                 <>
@@ -1092,6 +1136,14 @@ export function SoftwareClient({
                                         </p>
                                       )}
                                     </>
+                                  )}
+                                  {associatedJob && (
+                                    <p>
+                                      <span className="text-muted-foreground">Trabajo:</span>{' '}
+                                      <span className="font-medium text-foreground flex items-center gap-1 mt-0.5">
+                                        <Briefcase className="h-3 w-3 text-muted-foreground" /> {associatedJob.title}
+                                      </span>
+                                    </p>
                                   )}
                                 </>
                               )
@@ -1161,6 +1213,7 @@ export function SoftwareClient({
             categories={categories} 
             clients={clients}
             equipment={equipment}
+            jobs={jobs}
             onClose={() => { setIsOpen(false); setEditLicense(undefined) }} 
           />
         </DialogContent>
