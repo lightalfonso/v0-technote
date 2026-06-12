@@ -34,6 +34,7 @@ export async function createEquipment(data: {
   status?: string
   lastMaintenance?: string
   clientId?: number | null
+  pricePaid?: number | null
 }) {
   const userId = await getUserId()
   const result = await db.insert(equipment).values({
@@ -53,6 +54,7 @@ export async function createEquipment(data: {
     status: data.status ?? 'active',
     lastMaintenance: data.lastMaintenance ?? null,
     clientId: data.clientId ?? null,
+    pricePaid: data.pricePaid ?? null,
   }).returning({ id: equipment.id })
   revalidatePath('/dashboard/equipos')
   return result[0]
@@ -76,6 +78,7 @@ export async function updateEquipment(
     status: string
     lastMaintenance: string
     clientId: number | null
+    pricePaid: number | null
   }>
 ) {
   const userId = await getUserId()

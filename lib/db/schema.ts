@@ -141,6 +141,7 @@ export const equipment = pgTable('equipment', {
   status: text('status').notNull().default('active'),
   lastMaintenance: date('last_maintenance'),
   clientId: integer('client_id').references(() => clients.id, { onDelete: 'set null' }),
+  pricePaid: integer('price_paid'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })

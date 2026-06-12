@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, useMemo } from 'react'
 import { createSoftwareLicense, updateSoftwareLicense, deleteSoftwareLicense } from '@/app/actions/software'
 import { createClient } from '@/app/actions/clients'
-import { createEquipment } from '@/app/actions/equipment'
+import { createEquipment, updateEquipment } from '@/app/actions/equipment'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -174,8 +174,13 @@ function exportLicenseToTxt(
     txt += `\nDATOS DE INSTALACIÓN & CLIENTE:\n`;
     if (dispName) txt += `- Cliente instalado: ${dispName}\n`;
     if (dispPhone) txt += `- Teléfono del cliente: ${dispPhone}\n`;
-    if (equipObj) txt += `- Equipo: ${equipObj.name}${equipObj.brand || equipObj.model ? ` (${[equipObj.brand, equipObj.model].filter(Boolean).join(' ')})` : ''}\n`;
-    if (lic.pricePaid) txt += `- Monto pagado: CLP ${new Intl.NumberFormat('es-CL').format(lic.pricePaid)}\n`;
+    if (equipObj) {
+      txt += `- Equipo: ${equipObj.name}${equipObj.brand || equipObj.model ? ` (${[equipObj.brand, equipObj.model].filter(Boolean).join(' ')})` : ''}\n`;
+      if (equipObj.pricePaid) {
+        txt += `- Cobro por equipo: CLP ${new Intl.NumberFormat('es-CL').format(equipObj.pricePaid)}\n`;
+      }
+    }
+    if (lic.pricePaid) txt += `- Cobro por licencia: CLP ${new Intl.NumberFormat('es-CL').format(lic.pricePaid)}\n`;
     if (lic.installationNotes) txt += `- Notas de instalación: ${lic.installationNotes}\n`;
   }
   
@@ -234,6 +239,8 @@ function LicenseForm({
   const [newEquipmentBrand, setNewEquipmentBrand] = useState('')
   const [newEquipmentModel, setNewEquipmentModel] = useState('')
   const [createEquipmentForNewClient, setCreateEquipmentForNewClient] = useState(false)
+  const [newEquipmentPricePaid, setNewEquipmentPricePaid] = useState('')
+  const [equipPricePaid, setEquipPricePaid] = useState('')
 
   // Details
   const [pricePaid, setPricePaid] = useState(license?.pricePaid?.toString() ?? '')
@@ -245,7 +252,7 @@ function LicenseForm({
   const [showPurchasePass, setShowPurchasePass] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  // Filter equipment related to selected client (loose comparison to be safe)
+  // Filter equipment related to selected client (loose comparison)
   const clientEquipment = useMemo(() => {
     if (clientSelection === 'none' || clientSelection === 'new') return []
     const cidStr = clientSelection.toString()
@@ -264,6 +271,16 @@ function LicenseForm({
       }
     }
   }, [clientSelection, clientEquipment, equipmentSelection])
+
+  // Sync pricePaid input when selected equipment changes
+  useEffect(() => {
+    if (equipmentSelection !== 'none' && equipmentSelection !== 'new') {
+      const eq = equipment.find(e => e.id.toString() === equipmentSelection.toString())
+      setEquipPricePaid(eq?.pricePaid?.toString() ?? '')
+    } else {
+      setEquipPricePaid('')
+    }
+  }, [equipmentSelection, equipment])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -305,6 +322,7 @@ function LicenseForm({
             clientId: finalClientId,
             ownerName: finalClientName || undefined,
             ownerType: 'client',
+            pricePaid: newEquipmentPricePaid ? parseInt(newEquipmentPricePaid) : null,
           })
           if (createdEquip?.id) {
             finalEquipmentId = createdEquip.id
@@ -320,12 +338,20 @@ function LicenseForm({
             clientId: finalClientId,
             ownerName: finalClientName || undefined,
             ownerType: 'client',
+            pricePaid: newEquipmentPricePaid ? parseInt(newEquipmentPricePaid) : null,
           })
           if (createdEquip?.id) {
             finalEquipmentId = createdEquip.id
           }
         } else if (equipmentSelection !== 'none') {
           finalEquipmentId = parseInt(equipmentSelection)
+          // Update existing equipment price if edited
+          const eq = equipment.find(e => e.id.toString() === equipmentSelection.toString())
+          if (eq && eq.pricePaid?.toString() !== equipPricePaid) {
+            await updateEquipment(finalEquipmentId, {
+              pricePaid: equipPricePaid ? parseInt(equipPricePaid) : null
+            })
+          }
         }
       }
 
@@ -561,6 +587,15 @@ function LicenseForm({
                     placeholder="Ej: EliteBook G3" 
                   />
                 </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <Label>Monto cobrado por este equipo (CLP)</Label>
+                  <Input 
+                    type="number" 
+                    value={newEquipmentPricePaid} 
+                    onChange={(e) => setNewEquipmentPricePaid(e.target.value)} 
+                    placeholder="Ej: 35000" 
+                  />
+                </div>
               </div>
             )}
           </>
@@ -630,14 +665,38 @@ function LicenseForm({
                     placeholder="Ej: EliteBook G3" 
                   />
                 </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <Label>Monto cobrado por este equipo (CLP)</Label>
+                  <Input 
+                    type="number" 
+                    value={newEquipmentPricePaid} 
+                    onChange={(e) => setNewEquipmentPricePaid(e.target.value)} 
+                    placeholder="Ej: 35000" 
+                  />
+                </div>
+              </div>
+            )}
+
+            {equipmentSelection !== 'none' && equipmentSelection !== 'new' && (
+              <div className="flex flex-col gap-2 col-span-2 bg-secondary/10 p-2.5 rounded border border-border/50">
+                <Label>Monto cobrado por este equipo (CLP)</Label>
+                <Input 
+                  type="number" 
+                  value={equipPricePaid} 
+                  onChange={(e) => setEquipPricePaid(e.target.value)} 
+                  placeholder="Ej: 35000" 
+                />
+                <span className="text-[10px] text-muted-foreground">
+                  Nota: Modificar este monto actualizará el cobro para todas las licencias instaladas en este equipo.
+                </span>
               </div>
             )}
           </>
         )}
 
         <div className="flex flex-col gap-2 col-span-2">
-          <Label>Cuánto pagó (CLP)</Label>
-          <Input type="number" value={pricePaid} onChange={(e) => setPricePaid(e.target.value)} placeholder="Ej: 35000" />
+          <Label>Cuánto pagó por esta licencia individual (CLP - Opcional)</Label>
+          <Input type="number" value={pricePaid} onChange={(e) => setPricePaid(e.target.value)} placeholder="Ej: 15000" />
         </div>
 
         {/* Garantía & Activación */}
@@ -1017,19 +1076,29 @@ export function SoftwareClient({
                                   )}
                                   {dispPhone && <p><span className="text-muted-foreground">Teléfono:</span> {dispPhone}</p>}
                                   {associatedEquip && (
-                                    <p>
-                                      <span className="text-muted-foreground">Equipo:</span>{' '}
-                                      <span className="font-medium text-foreground flex items-center gap-1 mt-0.5">
-                                        <Laptop className="h-3 w-3 text-muted-foreground" /> {associatedEquip.name}
-                                      </span>
-                                    </p>
+                                    <>
+                                      <p>
+                                        <span className="text-muted-foreground">Equipo:</span>{' '}
+                                        <span className="font-medium text-foreground flex items-center gap-1 mt-0.5">
+                                          <Laptop className="h-3 w-3 text-muted-foreground" /> {associatedEquip.name}
+                                        </span>
+                                      </p>
+                                      {associatedEquip.pricePaid && (
+                                        <p>
+                                          <span className="text-muted-foreground font-semibold">Cobro Equipo:</span>{' '}
+                                          <span className="font-semibold text-emerald-500">
+                                            {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(associatedEquip.pricePaid)}
+                                          </span>
+                                        </p>
+                                      )}
+                                    </>
                                   )}
                                 </>
                               )
                             })()}
                             {lic.pricePaid && (
                               <p>
-                                <span className="text-muted-foreground">Pagó:</span>{' '}
+                                <span className="text-muted-foreground">Cobro Licencia:</span>{' '}
                                 <span className="font-medium text-emerald-500">
                                   {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(lic.pricePaid)}
                                 </span>

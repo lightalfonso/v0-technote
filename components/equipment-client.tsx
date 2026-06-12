@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { createEquipment, updateEquipment, deleteEquipment } from '@/app/actions/equipment'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,21 +54,34 @@ function EquipmentForm({ item, categories, onClose }: { item?: Equipment; catego
   const [status, setStatus] = useState(item?.status ?? 'active')
   const [lastMaintenance, setLastMaintenance] = useState(item?.lastMaintenance ?? '')
   const [categoryId, setCategoryId] = useState(item?.categoryId?.toString() ?? '')
+  const [pricePaid, setPricePaid] = useState(item?.pricePaid?.toString() ?? '')
   const [isPending, startTransition] = useTransition()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     startTransition(async () => {
       const data = {
-        name, brand: brand || undefined, model: model || undefined,
-        serialNumber: serialNumber || undefined, ownerName: ownerName || undefined,
-        ownerType, purchaseDate: purchaseDate || undefined,
-        warrantyExpiry: warrantyExpiry || undefined, capacity: capacity || undefined,
-        specs: specs || undefined, notes: notes || undefined, status,
+        name, 
+        brand: brand || undefined, 
+        model: model || undefined,
+        serialNumber: serialNumber || undefined, 
+        ownerName: ownerName || undefined,
+        ownerType, 
+        purchaseDate: purchaseDate || undefined,
+        warrantyExpiry: warrantyExpiry || undefined, 
+        capacity: capacity || undefined,
+        specs: specs || undefined, 
+        notes: notes || undefined, 
+        status,
         lastMaintenance: lastMaintenance || undefined,
         categoryId: categoryId && categoryId !== 'none' ? parseInt(categoryId) : null,
+        pricePaid: pricePaid ? parseInt(pricePaid) : null,
       }
-      if (item) { await updateEquipment(item.id, data) } else { await createEquipment(data) }
+      if (item) { 
+        await updateEquipment(item.id, data) 
+      } else { 
+        await createEquipment(data) 
+      }
       onClose()
     })
   }
@@ -99,7 +112,11 @@ function EquipmentForm({ item, categories, onClose }: { item?: Equipment; catego
         <div className="flex flex-col gap-2">
           <Label>Tipo de propietario</Label>
           <Select value={ownerType} onValueChange={setOwnerType}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue>
+                {OWNER_TYPES.find(o => o.value === ownerType)?.label ?? 'Seleccione'}
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
               {OWNER_TYPES.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
@@ -108,7 +125,11 @@ function EquipmentForm({ item, categories, onClose }: { item?: Equipment; catego
         <div className="flex flex-col gap-2">
           <Label>Estado</Label>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue>
+                {STATUS_OPTIONS.find(s => s.value === status)?.label ?? 'Seleccione'}
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
               {STATUS_OPTIONS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
             </SelectContent>
@@ -117,7 +138,13 @@ function EquipmentForm({ item, categories, onClose }: { item?: Equipment; catego
         <div className="flex flex-col gap-2">
           <Label>Categoría</Label>
           <Select value={categoryId} onValueChange={setCategoryId}>
-            <SelectTrigger><SelectValue placeholder="Sin categoría" /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue>
+                {categoryId === 'none' || !categoryId
+                  ? 'Sin categoría'
+                  : (categories.find(c => c.id.toString() === categoryId)?.name ?? 'Sin categoría')}
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">Sin categoría</SelectItem>
               {categories.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
@@ -139,6 +166,10 @@ function EquipmentForm({ item, categories, onClose }: { item?: Equipment; catego
         <div className="flex flex-col gap-2">
           <Label>Última mantención</Label>
           <Input type="date" value={lastMaintenance} onChange={(e) => setLastMaintenance(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-2 col-span-2">
+          <Label>Monto cobrado/pagado por equipo (CLP)</Label>
+          <Input type="number" value={pricePaid} onChange={(e) => setPricePaid(e.target.value)} placeholder="Ej: 35000" />
         </div>
         <div className="flex flex-col gap-2 col-span-2">
           <Label>Especificaciones</Label>
@@ -206,14 +237,26 @@ export function EquipmentClient({ initialEquipment, categories }: { initialEquip
           <Input placeholder="Buscar por nombre, marca, serial, propietario..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Estado" /></SelectTrigger>
+          <SelectTrigger className="w-40">
+            <SelectValue>
+              {filterStatus === 'all' 
+                ? 'Todos los estados' 
+                : (STATUS_OPTIONS.find(s => s.value === filterStatus)?.label ?? 'Estado')}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos los estados</SelectItem>
             {STATUS_OPTIONS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterOwnerType} onValueChange={setFilterOwnerType}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Propietario" /></SelectTrigger>
+          <SelectTrigger className="w-36">
+            <SelectValue>
+              {filterOwnerType === 'all' 
+                ? 'Todos' 
+                : (OWNER_TYPES.find(o => o.value === filterOwnerType)?.label ?? 'Propietario')}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
             {OWNER_TYPES.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -266,6 +309,14 @@ export function EquipmentClient({ initialEquipment, categories }: { initialEquip
                     <div className="flex items-center gap-4 mt-2 flex-wrap text-xs text-muted-foreground">
                       {eq.ownerName && <span>Propietario: {eq.ownerName}</span>}
                       {eq.capacity && <span>Capacidad: {eq.capacity}</span>}
+                      {eq.pricePaid && (
+                        <span>
+                          Cobrado:{' '}
+                          <span className="font-semibold text-emerald-500">
+                            {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(eq.pricePaid)}
+                          </span>
+                        </span>
+                      )}
                       {eq.lastMaintenance && <span>Mant.: {new Date(eq.lastMaintenance).toLocaleDateString('es-CL')}</span>}
                       {eq.warrantyExpiry && <span>Garantía: {new Date(eq.warrantyExpiry).toLocaleDateString('es-CL')}</span>}
                     </div>
