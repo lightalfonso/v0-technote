@@ -164,8 +164,8 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
             </Button>
           </form>
 
-          <div className="mt-5 pt-5 border-t border-border text-center">
-            {isSignUp ? (
+          {isSignUp && (
+            <div className="mt-5 pt-5 border-t border-border text-center">
               <p className="text-sm text-muted-foreground">
                 ¿Ya tienes cuenta?{' '}
                 <Link
@@ -175,12 +175,8 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
                   Inicia sesión
                 </Link>
               </p>
-            ) : (
-              <p className="text-sm text-muted-foreground italic text-muted-foreground/60">
-                El registro de nuevas cuentas está deshabilitado
-              </p>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Features hint */}
