@@ -18,6 +18,7 @@ import {
   Wrench,
   Users,
   ShieldCheck,
+  FileText,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -100,6 +101,22 @@ export function Sidebar({ userName, userEmail }: SidebarProps) {
             </Link>
           )
         })}
+
+        {/* Separator and static link for Curriculum PDF */}
+        <div className="h-px bg-border my-2 flex-shrink-0" />
+        <a
+          href="/curriculum.pdf"
+          target="_blank"
+          rel="noopener noreferrer"
+          title={collapsed ? "Ver Currículum" : undefined}
+          className={cn(
+            'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-muted-foreground hover:bg-accent hover:text-foreground',
+            collapsed && 'justify-center px-0'
+          )}
+        >
+          <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          {!collapsed && <span>Ver Currículum</span>}
+        </a>
       </nav>
 
       {/* User + collapse */}
