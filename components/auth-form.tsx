@@ -7,7 +7,7 @@ import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { MonitorCog, Lock, Mail, User, ArrowRight, Terminal } from 'lucide-react'
+import { MonitorCog, Lock, Mail, User, ArrowRight, Terminal, FileText } from 'lucide-react'
 import { getEmailByName } from '@/app/actions/auth'
 
 export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
@@ -164,7 +164,7 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
             </Button>
           </form>
 
-          {isSignUp && (
+          {isSignUp ? (
             <div className="mt-5 pt-5 border-t border-border text-center">
               <p className="text-sm text-muted-foreground">
                 ¿Ya tienes cuenta?{' '}
@@ -175,6 +175,18 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
                   Inicia sesión
                 </Link>
               </p>
+            </div>
+          ) : (
+            <div className="mt-4 pt-4 border-t border-border">
+              <a
+                href="/curriculum.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shadow-sm"
+              >
+                <FileText className="h-4 w-4" />
+                Ver Currículum (PDF)
+              </a>
             </div>
           )}
         </div>
